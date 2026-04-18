@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+  
+  <meta charset="UTF-8"/>
+  
+  <title>Final Design Work in Progress.  WA Data Breach Analysis   </title>
+  
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  
+  
+  
+  
+  
+  
+  
+</head>
+<body>
+
+
+
+
+
+
+
+<h1>WA Data Breach Analysis</h1>
+
+
+
+
+
+
+
+<h2>First Idea: Residents Affected per Month (Area)</h2>
+
+
+
+
+<svg id="basicLine-Svg"></svg>
+
+
+
+
+
+
+
+
+
+<h2>  Breach Events per Year (Bar)</h2>
+
+
+
+
+
+
+<svg id="myBar-svg"></svg>
+
+<h2>Residents Affected by Industry (Treemap)</h2>
+
+
+
+
+<svg id="treemap-svg"></svg>
+
+
+
+
+
+
+<script>
+
+
+
+
+const inputCsv = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+
+
+
+
+
+// read in data
+d3.csv(inputCsv).then(rawIn => {
+  // console.log('Loaded:', rawIn.length);
+
+
+
+
+  // separateby breach ID
+  const mySeen    = new Set();
+  const _rowsData = [];
+
+
+  // load
+  rawIn.forEach(row => {
+
+
+    // init
+    if (mySeen.has(row.Id)) return;
+
+
+    //
+    mySeen.add(row.Id);
+
+
+
+    const validDate =   d3.timeParse('%m/%d/%Y %I:%M:%S %p')(row.DateAware);
+
+
+    // safety, return if not valid format
+    if (!validDate) return;
+
+
+
+    // add to map
+    _rowsData.push({
+
+      date: validDate,
+
+      year:     validDate.getFullYear(),
+      month:    d3.timeMonth(validDate),
+
+      aff:      +row.WashingtoniansAffected || 0,
+
+      industry: row.IndustryType?.trim() || 'Unknown',
+
+    });
+
+  });
+
+  // console.log('Unique - Checking:', _rowsData.length);
+
+
+
+
+
+  // build all the graphs in one shot
+
+  genLineGraph(_rowsData);
+  generateBar(_rowsData);
+  generateTreemap(_rowsData);
+
+
+
+});
+
+
+
+
+
+
+
+
+//  residents affected per month
+function genLineGraph(rows) {
+
+
+
+
+
+
+  // add    up total residents affected
+  const totalByMonth = d3.rollups(rows, v =>
+          d3.sum(v, d => d.aff), d => d.month)
+
+
+    .map(([date, total]) => ({ date, total }))
+    .sort((a, b) => a.date - b.date); // sort for aesthetic
+
+
+  console.log('Monthly     :', totalByMonth.length);
+
+
+
+
+  // todo change to dynamic spacing on screen
+  const _margin = { top: 20, right: 20,       bottom: 42, left: 82 };
+  const width = 902 - _margin.left - _margin.right;
+  const height = 301 -     _margin.top - _margin.bottom;
+
+
+
+
+
+  const fullSvg = d3.select('#basicLine-Svg')
+    .attr('width',    width + _margin.left + _margin.right).attr('height', height + _margin.top + _margin.bottom);
+
+
+
+  // group
+  const g = fullSvg.append('g').attr('transform', `translate(${_margin.left},${_margin.top})`);
+
+
+
+
+
+  const x = d3.scaleTime().domain(d3.extent(totalByMonth, row => row.date)).range([0, width]);
+  const y =     d3.scaleLinear().domain([0, d3.max(totalByMonth, row => row.total)]).range([height, 0]).nice();
+
+  // axis
+
+
+  //////////
+  g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
+  g.append('g').call(d3.axisLeft(y).ticks(8).tickFormat(d3.format('.2s')));
+
+  // labels
+  // translation
+  g.append('text').attr('x', width / 2).attr('y', height + 35).attr('text-anchor', 'middle').text('Year');
+  g.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -65).attr('text-anchor', 'middle').text('Residents Affected');
+
+
+
+
+
+
+  // fill area
+  const area_fill = d3.area().x(d => x(d.date)).y0(height).y1(d => y(d.total)).curve(d3.curveMonotoneX);
+  g.append('path').datum(totalByMonth).attr('fill', 'steelblue').attr('opacity', 0.3).attr('d', area_fill);
+
+
+
+
+  // my line
+  const _line = d3.line().x(row => x(row.date)).y(d => y(d.total)).curve(d3.curveMonotoneX);
+  g.append('path').datum(totalByMonth).attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 2).attr('d', _line);
+
+  // console.log('test');
+}
+
+
+
+
+
+// now bar chart - breach counts
+
+function generateBar(rows) {
+  // per year totals
+  const perYearTotals = d3.rollups(rows, v => v.length, d => d.year).map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year - b.year);
+
+
+
+  const marg = { top: 22, right: 24, bottom: 42, left: 62 };
+
+
+
+  const width = 900   - marg.left - marg.right;
+  const height = 280   - marg.top - marg.bottom;
+
+  const _svg = d3.select('#myBar-svg')
+    .attr('width', width + marg.left +    marg.right).attr('height', height + marg.top + marg.bottom);
+
+
+  // transforms
+  const g = _svg.append('g').attr('transform', `translate(${marg.left},${marg.top})`);
+
+
+
+  // Scales
+  const x = d3.scaleBand().domain(perYearTotals.map(row => row.year)).range([0, width]).padding(0.2);
+  const y = d3.scaleLinear().domain([0, d3.max(perYearTotals, row => row.count)]).range([height, 0]).nice();
+
+
+
+
+
+  // axis
+  g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).tickFormat(d3.format('d')));
+
+  g.append('g').call(d3.axisLeft(y).ticks(8));
+
+  // labels
+
+  g.append('text').attr('x', width / 2).attr('y', height + 35).attr('text-anchor', 'middle')
+          .text('Year');
+  g.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -45).attr('text-anchor', 'middle').text('Breach Incidents');
+
+
+
+  // add bar charts
+  g.selectAll('rect').data(perYearTotals).join('rect')
+    .attr('x', row => x(row.year)).attr('y', d => y(d.count))
+    .attr('width', x.bandwidth())
+    .attr('height', row => height - y(row.count)).attr('fill', 'steelblue').attr('opacity', 0.8);
+
+
+
+
+}
+
+
+
+
+
+// lastly, treemap of affected residents
+function generateTreemap(rows) {
+  // ''
+  //  residents affected per industry
+
+
+
+  const industrySums =    d3.rollups(rows, v => d3.sum(v, _rows => _rows.aff),
+          d => d.industry)
+
+    .map(([industry, total]) => ({ industry, total })) // convert to plain objects
+    .filter(d => d.total > 0) // remove empties
+
+    .sort((a, b) => b.total - a.total);
+
+
+  console.log('Industry -     ', industrySums.length);
+
+  const treeMapWid = 902, tHeight = 320;
+
+
+
+
+
+  const treeMapSvg = d3.select('#treemap-svg').attr('width', treeMapWid).attr('height', tHeight);
+
+  // layout
+  const baseLayout = d3.hierarchy({ children: industrySums.map(row => ({ name: row.industry, value: row.total })) })
+
+          //
+    .sum(d => d.value)
+    .sort((a, b) => b.value - a.value);
+
+
+  // set size layout
+  d3.treemap().size([treeMapWid, tHeight]).padding(2).round(true)(baseLayout);
+
+  const _treemapColors = d3.scaleOrdinal(d3.schemeTableau10);
+
+
+
+
+  const treeMapCells    = treeMapSvg.selectAll('g').data(baseLayout.leaves()).join('g')
+    .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+  // add cells as rectangles
+  // console.log()
+  treeMapCells.append('rect').attr('width',  _r  => _r.x1 - _r.x0).attr('height', d => d.y1 - d.y0)
+
+
+          .attr('fill',   _rows => _treemapColors(_rows.data.name))
+    .attr('opacity', 0.8).attr('stroke', '#fff');
+
+
+
+
+  // add labels when spaced properly
+  treeMapCells.append('text')
+    .attr('x', 4).attr('y', 13).attr('font-size', 11).text(val => (val.x1 - val.x0) > 50 ? val.data.name : '');
+
+  // console.log('done');
+}
+
+</script>
+</body>
+
+
+
+
+
+
+
+
+
+
+
+</html>
