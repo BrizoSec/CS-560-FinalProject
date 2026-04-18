@@ -1,0 +1,19 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node (if ever used)
+node_modules/
+npm-debug.log*
+
+# Build / temp
+dist/
+tmp/
+*.tmp
+*.log
