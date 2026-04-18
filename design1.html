@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <title>Design 1: Temporal Dashboard   </title>
+
+
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+</head>
+
+<body>
+
+
+<h2>Design 1: Washingtonians Affected per Month    </h2>
+
+<svg id="main-svg"></svg>
+
+<script>
+
+
+
+const input_file = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+
+// now i need svg k dims and margins
+const _marg = { top: 20, right: 30, bottom: 40, left: 80 };
+const finalWid = 960, totalH = 400;
+const wid = finalWid - _marg.left - _marg.right;
+
+const height = totalH - _marg.top -      _marg.bottom;
+
+
+
+
+
+
+// now set svg
+const svg = d3.select('#main-svg')
+  .attr('width', finalWid).attr('height', totalH);
+
+//  drawing group, offset by margin
+const g = svg.append('g').attr('transform', `translate(${_marg.left},${_marg.top})`);
+
+
+
+
+
+
+// x = time,         y = residents affected
+const x =        d3.scaleTime().range([0, wid]);
+const y =  d3.scaleLinear().range([height, 0]);
+
+
+
+const _area = d3.area().x(d => x(d.date)).y0(height).y1(d => y(d.total)).curve(d3.curveMonotoneX);
+const supportingLine = d3.line().x(d => x(d.date)).y(d => y(d.total)).curve(d3.curveMonotoneX);
+
+
+
+
+// console.log('', input_file);
+d3.csv(input_file).then(myInput => {
+
+
+  console.log('Loaded rowsjk:',    myInput.length);
+
+
+
+
+  // dedupe by breach ID
+  const haveSeen = new Set();
+
+
+
+  const rows = [];
+
+  // loop over and check
+  myInput.forEach(r => {
+
+
+    if (haveSeen.has(r.Id)) return;
+
+
+    haveSeen.add(r.Id);
+
+
+    const date = d3.timeParse('%m/%d/%Y %I:%M:%S %p')(r.DateAware);
+
+    // safety check
+    if (!date) return;
+
+
+    rows.push({ date, affected: +r.WashingtoniansAffected || 0 });
+
+
+  });
+  console.log('Unique breachs:', rows.length);
+
+
+
+
+  // add    up total residents affected per calendar month
+  const byMonth = d3.rollups(rows,
+    v => ({ total: d3.sum(v, d => d.affected) }),
+    d => d3.timeMonth(d.date)
+  ).map(([date, vals]) => ({ date, ...vals })).sort((a, b) => a.date - b.date);
+
+
+  // console.log('Monthsdata:', byMonth.length);
+
+
+
+  x.domain(d3.extent(byMonth, d => d.date));
+  y.domain([0, d3.max(byMonth, d => d.total) * 1.08]).nice();
+
+  // axis addition
+  g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
+  g.append('g').call(d3.axisLeft(y).ticks(6).tickFormat(d3.format('.2s')));
+
+  // lab
+  g.append('text').attr('x', wid / 2).attr('y', height + 35).attr('text-anchor', 'middle').text('Year');
+  g.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -60).attr('text-anchor', 'middle').text('Residents Affected');
+
+  // fill and lines draw
+  g.append('path').datum(byMonth).attr('fill', 'steelblue').attr('opacity', 0.3).attr('d', _area);
+  g.append('path').datum(byMonth).attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 2).attr('d', supportingLine);
+
+  console.log('Chart rendered');
+});
+
+</script>
+
+</body>
+
+</html>
+
+
+
+
+
+
+
+

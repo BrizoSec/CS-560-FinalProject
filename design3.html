@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8"/>
+
+  <title>Design 3: Heatmap View of Breaches</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+
+
+
+
+</head>
+<body>
+
+
+
+
+
+
+<h2>Design 3:  Breach Count by Month and Year</h2>
+
+
+
+
+<svg id="chart"></svg>
+
+
+
+
+
+<script>
+
+
+
+
+
+const inputData = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+
+
+
+// maybe dont hardcode these, not sure
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',    'Dec'];
+
+
+
+
+const expectedFormat = d3.timeParse('%m/%d/%Y %I:%M:%S %p');
+
+
+
+
+
+
+// first load my data
+
+d3.csv(inputData).then(inputLoadData => {
+  // console.log('Loadeds:',     inputLoadData.length);
+
+  // same as bfore, split on by breach ID
+  const mySeen = new Set();
+
+  const rows = [];
+
+
+
+  // loop over and check
+  inputLoadData.forEach(_item => {
+
+
+
+    if (mySeen.has(_item.Id)) return;
+
+    ///////////////////////
+    mySeen.add(_item.Id);
+
+    const parseable = expectedFormat(_item.DateAware);
+
+    // safety check - skip ones we can't parse
+    if (!parseable) return;
+
+    rows.push({ year: parseable.getFullYear(),     month: parseable.getMonth() });
+
+
+  });
+  console.log('Uniques\n', rows.length);
+
+
+
+
+
+
+  // breaches per year and month (cells)
+  const rollupMap = d3.rollups(rows,    v => v.length, yr => yr.year,
+          d => d.month);
+
+
+
+  const resYrs = [...new Set(rows.map(d => d.year))].sort(); //
+
+
+
+  const _workingDta = [];
+
+
+
+
+  // loop over aeach and populate map
+  rollupMap.forEach(([year, months]) =>
+
+    months.forEach(([month, count]) => _workingDta.push({ year, month, count }))
+  );
+
+
+  // console.log('', resYrs, 'Cells:', _workingDta.length);
+
+
+
+
+
+
+  // Sequential scale at first:     more breaches = darker from class
+
+  const scaleForColors = d3.scaleSequential(d3.interpolateBlues).domain([0, d3.max(_workingDta, d => d.count)]);
+
+
+
+
+
+  const chartWidth = 62, CH = 36, padL = 46, padT = 26, padB = 20;
+  const fullW = padL + MONTHS.length * chartWidth + 12;
+
+  //
+  const H = padT + resYrs.length * CH + padB;
+
+  const resSvg = d3.select('#chart').attr('width', fullW).attr('height', H);
+
+
+
+
+
+  //  labels (columns) - month
+  resSvg.selectAll('.mlbl').data(MONTHS).join('text')
+    .attr('x', (d,i) => padL + i*chartWidth + chartWidth/2).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 11).text(d => d);
+
+  // year label on row
+  resSvg.selectAll('.ylbl').data(resYrs).join('text')
+    .attr('x', padL - 6).attr('y', (d,i) => padT + i*CH + CH/2).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').attr('font-size', 11).text(d => d);
+
+
+
+
+
+
+  // background for every cells
+  const allCells = [];
+
+  // for each cell, set the value from dataset
+  resYrs.forEach(y => MONTHS.forEach((m,mi) => allCells.push({ year:y, month:mi, yi:resYrs.indexOf(y) })));
+
+
+  // Background cells
+  resSvg.selectAll('.bg').data(allCells).join('rect')
+    .attr('x', d => padL + d.month*chartWidth + 2).attr('y', d => padT + d.yi*CH + 2)
+    .attr('width', chartWidth-4).attr('height', CH-4).attr('rx', 3).attr('fill', '#ddd');
+
+
+
+
+
+  // add color for populated data
+  ///////////////
+  resSvg.selectAll('.cell').data(_workingDta).join('rect')
+
+    .attr('x', d => padL + d.month*chartWidth + 2).attr('y', row => padT + resYrs.indexOf(row.year)*CH + 2)
+    .attr('width', chartWidth-4).attr('height', CH-4).attr('rx', 3).attr('fill', d => scaleForColors(d.count));
+
+  // console.log('done);
+});
+
+
+
+
+
+
+
+
+
+
+</script>
+</body>
+</html>
+
+
+
+
+

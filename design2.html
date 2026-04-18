@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8"/>
+
+  <title>Design 2: Categorical Network   </title>
+
+
+<!--  // mandatory scripts-->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+
+
+
+
+
+<h2>Design 2: Organization Type and Information Type Stolen    </h2>
+
+<svg id="cht"></svg>
+
+
+<script>
+
+
+
+
+
+const inputFile = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+
+
+
+
+
+
+
+// read in data first
+d3.csv(inputFile).then(superInputData => {
+
+
+
+
+  // console.log('Loaded rws:', superInputData.length);
+
+
+
+
+
+
+  // unique breach IDs per industry
+  const pairMap = new Map();
+  const industryMap  = new Map();
+
+  const infoMap = new Map();
+
+
+
+
+  superInputData.forEach(row => {
+    const ind  = row.IndustryType?.trim()    || 'Unknown';
+
+    const info = row.InformationType?.trim() ||     'Unknown';
+
+    const id   = row.Id;
+
+
+
+
+    //
+
+
+    const lookupKey = ind + '|||' + info;
+
+
+
+    // add key
+    if (!pairMap.has(lookupKey)) pairMap.set(lookupKey, { ind, info, ids: new Set() });
+
+
+    // add id
+    pairMap.get(lookupKey).ids.add(id);
+
+
+    // safety checks
+    if (!industryMap.has(ind))   industryMap.set(ind, new Set());
+    if (!infoMap.has(info)) infoMap.set(info, new Set());
+
+
+    // get added ids
+
+    industryMap.get(ind).add(id);
+    infoMap.get(info).add(id);
+  });
+
+
+
+
+
+
+  const allConnLinks  = [...pairMap.values()].map(row =>
+          ({ source: row.ind, target: row.info, count: row.ids.size }));
+
+
+
+
+  const industies  = [...industryMap.entries() ].map(([node,s]) =>
+          ({ name: node, count: s.size })).sort((a,b) => b.count-a.count);
+  const infoNodes = [...infoMap.entries()].map(([n,s]) =>
+          ({ name: n, count: s.size })).sort((a,b) => b.count-a.count);
+
+  // console.log('Industrs:', industies.length, 'nodes:',
+  //         infoNodes.length, ''Links:', allConnLinks.length);
+
+  // TODO - will update this later, in a time cruch
+  const ROW_H = 44;
+  const rws  = Math.max(industies.length, infoNodes.length);
+
+  const wid = 962,      height = rws * ROW_H + 60;
+  const leftX = 202,        RX = wid - 200,      MX = (leftX + RX) / 2;
+
+  const _svg = d3.select('#cht').attr('width', wid).attr('height', height);
+
+  // size and link width both use sqrt scale to compress large values down (used from class example)
+  // TODO change hardcoded valuies to variables
+  const rightSideNodeScale
+          = d3.scaleSqrt().domain([0, d3.max([...industies,...infoNodes], row => row.count)]).range([5, 20]);
+  const linkWeightSc  = d3.scaleSqrt().domain([0, d3.max(
+          allConnLinks, d => d.count)]).range([0.5, 14]);
+
+
+
+
+
+  /////////////////////////
+  const leftSideNodeScale  = d3.scalePoint().domain(
+          industies .map(d=>d.name)).range([30, height-20]).padding(0.4);
+  const rightYScale = d3.scalePoint().domain(
+          infoNodes.map(row=>row.name)).range([30, height-20]).padding(0.4);
+
+  // headers
+  _svg.append('text').attr('x', leftX).attr('y', 14)
+          .attr('text-anchor', 'middle').attr('font-size', 12).text('Organization  Type');
+  _svg.append('text').attr('x', RX).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12)
+          .text('Information  Type Stolen');
+
+
+
+
+
+  // found cool thing call bezier curve to try
+  // citation: https://stackoverflow.com/questions/60293272/drawing-beziercurve-in-d3-jsok
+  _svg.append('g').selectAll('path')
+    .data(allConnLinks).join('path').attr('fill', 'none').attr('stroke', 'steelblue')
+    .attr('stroke-width', d => linkWeightSc(d.count))
+
+
+    .attr('opacity',    0.3)
+
+    .attr('d', myRow => {
+      const leftS = leftSideNodeScale(myRow.source),       ty = rightYScale(myRow.target);
+      // this is basically the positioning that it uses for ines
+      return `M${leftX},${leftS} C${MX},${leftS} ${MX},${ty} ${RX},${ty}`;
+
+    });
+
+  // nodes on left
+  industies.forEach(_node => {
+    const yCoord    = leftSideNodeScale(_node.name),
+            r = rightSideNodeScale(_node.count);
+
+
+    const transformedGrid = _svg.append('g').attr('transform', `translate(${leftX},${yCoord})`);
+    transformedGrid.append('circle').attr('r', r).attr('fill', 'steelblue');
+    transformedGrid.append('text').attr('x', -(r+6)).attr('dy', '0.35em').attr('text-anchor', 'end').attr('font-size', 12)
+            .text(_node.name);
+  });
+
+  //info types on right
+  infoNodes.forEach(_type => {
+    const yLocation   = rightYScale(_type.name), r = rightSideNodeScale(_type.count);
+
+    // positioning
+    const _nodeLoc = _svg.append('g').attr('transform', `translate(${RX},${yLocation})`);
+    _nodeLoc.append('circle').attr('r', r).attr('fill', 'steelblue');
+    _nodeLoc.append('text').attr('x', r+6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(_type.name);
+  });
+
+  // console.log('- chase');
+});
+
+</script>
+
+</body>
+
+
+
+
+
+
+
+
+
+
+
+
+
+</html>
