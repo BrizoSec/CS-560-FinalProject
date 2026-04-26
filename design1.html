@@ -182,6 +182,13 @@ d3.csv(data_input_file).then(_inputData => {
 
   // filtering setup
   //  creates a horizontal selection ; extent defines  bounds
+  //  Brush API reference:
+  //   https://d3js.org/d3-brush
+  // Focus+Context brushing example
+  //   https://observablehq.com/@d3/focus-context
+  // some guy named bostock's example that was useful:
+  //   https://observablehq.com/@d3/brushable-scatterplot
+
   const _filteringBrushXAxis = d3.brushX().extent([[0, 0], [fullWidth, cH]]).on('brush end', _filterApplied);
   _filteringGroup.call(_filteringBrushXAxis);
 
@@ -222,6 +229,10 @@ d3.csv(data_input_file).then(_inputData => {
 
   // merica! tooltips
   // bisector finds nearesst x value to cursor
+  //  D3 Bisect API reference:
+  //   https://d3js.org/d3-array/bisect
+  // Bisect tooltip technique
+  //   https://observablehq.com/@d3/line-chart-with-tooltip
   const _bis = d3.bisector(d => d.date).left;
 
 
