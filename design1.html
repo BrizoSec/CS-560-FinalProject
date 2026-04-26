@@ -1,136 +1,259 @@
 <!DOCTYPE html>
 
+
 <html lang="en">
+
+
 
 <head>
 
+
   <meta charset="UTF-8" />
 
-  <title>Design 1: Temporal Dashboard   </title>
 
+
+  <title>Design 1: Temporal Dashboard   </title>
 
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
 </head>
 
+
+
 <body>
 
 
-<h2>Design 1: Washingtonians Affected per Month    </h2>
+
+<h2>Design 1: Washingtonians Affected per Month</h2>
+
+
+<p>Hover for monthly stats and use the slider to focus on specific time periods. </p>
+
+
 
 <svg id="main-svg"></svg>
 
+<div id="tooltip" style="position:absolute;background:#fff;border:1px solid #ccc;padding:6px;font-size:12px;pointer-events:none;opacity:0;"></div>
+
+
+
 <script>
 
+// console.log('getting started');
+
+// data set
+
+const data_input_file = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+// console.log('Input ', data_input_file);
 
 
-const input_file = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+// set up layout for main section and lower filtering section
+const _marg    = { top: 20, right: 30, bottom: 30, left: 80 }; // main chart margins
+const _margFiltering = { top: 10, right: 30, bottom: 30, left: 80 }; // filtering section margin
+const _totalWidth = 960;
 
-// now i need svg k dims and margins
-const _marg = { top: 20, right: 30, bottom: 40, left: 80 };
-const finalWid = 960, totalH = 400;
-const wid = finalWid - _marg.left - _marg.right;
-
-const height = totalH - _marg.top -      _marg.bottom;
-
-
-
-
+const _mainHeight = 300, _filteringHeight = 60, gap = 20; // heights of charts and gap between which
+const fullWidth  = _totalWidth - _marg.left - _marg.right;
+const _focusHeight = _mainHeight;
+const cH = _filteringHeight;
+const _totalHeight = _marg.top + _focusHeight + gap + _margFiltering.top + cH + _margFiltering.bottom;
 
 
-// now set svg
-const svg = d3.select('#main-svg')
-  .attr('width', finalWid).attr('height', totalH);
+// svg
+const _svg = d3.select('#main-svg').attr('width', _totalWidth).attr('height', _totalHeight);
 
-//  drawing group, offset by margin
-const g = svg.append('g').attr('transform', `translate(${_marg.left},${_marg.top})`);
-
-
-
-
-
-
-// x = time,         y = residents affected
-const x =        d3.scaleTime().range([0, wid]);
-const y =  d3.scaleLinear().range([height, 0]);
-
-
-
-const _area = d3.area().x(d => x(d.date)).y0(height).y1(d => y(d.total)).curve(d3.curveMonotoneX);
-const supportingLine = d3.line().x(d => x(d.date)).y(d => y(d.total)).curve(d3.curveMonotoneX);
+// clip enforces filtering selection
+_svg.append('defs').append('clipPath').attr('id', 'clip').append('rect').attr('width', fullWidth).attr('height', _focusHeight);
+// console.log('SVG created.');
 
 
 
 
-// console.log('', input_file);
-d3.csv(input_file).then(myInput => {
+// groups
+const _mainG = _svg.append('g').attr('transform', `translate(${_marg.left},${_marg.top})`);
+const _filterG  = _svg.append('g').attr('transform', `translate(${_margFiltering.left},${_marg.top + _focusHeight + gap + _margFiltering.top})`);
+
+// good ole tooltip
+const _tt = d3.select('#tooltip');
 
 
-  console.log('Loaded rowsjk:',    myInput.length);
+// set scales
+// x (time scale)
+// y (linear scale, inverted: 0 at bottom)
+const _x    = d3.scaleTime().range([0, fullWidth]);   // main x
+const _xFiltering = d3.scaleTime().range([0, fullWidth]);   // filter x
+const _yMain    = d3.scaleLinear().range([_focusHeight, 0]); // main y
+const _yFiltering = d3.scaleLinear().range([cH, 0]); //filter y
+// console.log('Scales created (domains will be ');
 
 
+// path generators
+// areaFn draws area under line
+// lineFn drops on top of chart
+// curveMonotoneX for curve
+const _areaSetting  = d3.area().x(d => _x(d.date)).y0(_focusHeight).y1(d => _yMain(d.total)).curve(d3.curveMonotoneX);
+const _lineSetting  = d3.line().x(d => _x(d.date)).y(d => _yMain(d.total)).curve(d3.curveMonotoneX);
+const _filledAreaFiltering = d3.area().x(d => _xFiltering(d.date)).y0(cH).y1(d => _yFiltering(d.total)).curve(d3.curveMonotoneX);
 
 
-  // dedupe by breach ID
-  const haveSeen = new Set();
+// set axes
+// axis groups are appended now
+const xAxisMain    = _mainG.append('g').attr('transform', `translate(0,${_focusHeight})`); // bottom
+const _yAxisAll    = _mainG.append('g');                                          // left edge
+const _xAxisFiltering = _filterG.append('g').attr('transform', `translate(0,${cH})`);  // bottom
+
+// labels
+_mainG.append('text').attr('x', fullWidth / 2).attr('y', _focusHeight + 28).attr('text-anchor', 'middle').text('Year ');
+_mainG.append('text').attr('transform', 'rotate(-90)').attr('x', -_focusHeight / 2).attr('y', -60).attr('text-anchor', 'middle').text('Residents Affected ');
 
 
+// path elements
+// add svg elements to path
+// use clip path to force filtering
+const areaPath = _mainG.append('path').attr('fill', 'steelblue').attr('opacity', 0.3).attr('clip-path', 'url(#clip)');
+const linePath = _mainG.append('path').attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 2).attr('clip-path', 'url(#clip)');
+const ctxPath  = _filterG.append('path').attr('fill', 'steelblue').attr('opacity', 0.2);
+
+// group for filtering
+const _filteringGroup = _filterG.append('g');
+
+// add overlay for mouse movement
+_mainG.append('rect').attr('fill', 'none').attr('pointer-events', 'all').attr('width', fullWidth).attr('height', _focusHeight);
+
+
+// load data
+// console.log('Loading CSV...');
+d3.csv(data_input_file).then(_inputData => {
+  // console.log(`CSV loaded ${_inputData.length}`);
+
+  // dedupe rows by ID
+  const _seen = new Set();
 
   const rows = [];
+  _inputData.forEach(r => {
+    if (_seen.has(r.Id)) return; // skip duplicate
+    _seen.add(r.Id);
 
-  // loop over and check
-  myInput.forEach(r => {
-
-
-    if (haveSeen.has(r.Id)) return;
-
-
-    haveSeen.add(r.Id);
-
+    // Parse the date string
 
     const date = d3.timeParse('%m/%d/%Y %I:%M:%S %p')(r.DateAware);
 
-    // safety check
-    if (!date) return;
-
+    if (!date) return; // skip rows with unparseable dates
 
     rows.push({ date, affected: +r.WashingtoniansAffected || 0 });
-
-
   });
-  console.log('Unique breachs:', rows.length);
+
+  // console.log(`Reading data complete`);
+
+
+  // aggregate by month
+  const _byMonthRollup = d3.rollups(
+    rows,
+    v => ({ total: d3.sum(v, d => d.affected), count: v.length }),
+    d => d3.timeMonth(d.date) // use first of month for rollup
+  ).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date - b.date);
+  // console.log(`Check Time: ${_byMonthRollup.length}`, _byMonthRollup.slice(0, 3));
+
+
+  // setting scalse
+  const _dataDateExtents = d3.extent(_byMonthRollup, d => d.date); // earliest and latest
+  // console.log(`Date extent: ${_dataDateExtents[0].toDateString()} → ${_dataDateExtents[1].toDateString()}`);
+
+  _x.domain(_dataDateExtents);      // main chart x starts at full range
+  _xFiltering.domain(_dataDateExtents);   // filtering x  shows full range
+  _yMain.domain([0, d3.max(_byMonthRollup, d => d.total) * 1.08]).nice();  // add some margin of space
+  _yFiltering.domain(_yMain.domain()); // make filtering y match main y at start
+
+
+  // render axis
+  xAxisMain.call(d3.axisBottom(_x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
+  _yAxisAll.call(d3.axisLeft(_yMain).ticks(6).tickFormat(d3.format('.2s')));
+  _xAxisFiltering.call(d3.axisBottom(_xFiltering).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
+
+
+  // render paths
+  // bind monthly data to chart paths
+  areaPath.datum(_byMonthRollup).attr('d', _areaSetting);
+  linePath.datum(_byMonthRollup).attr('d', _lineSetting);
+  ctxPath.datum(_byMonthRollup).attr('d', _filledAreaFiltering);
+  // console.log('Area and line  rendered.');
+
+
+  // filtering setup
+  //  creates a horizontal selection ; extent defines  bounds
+  const _filteringBrushXAxis = d3.brushX().extent([[0, 0], [fullWidth, cH]]).on('brush end', _filterApplied);
+  _filteringGroup.call(_filteringBrushXAxis);
 
 
 
+  // Default to last 5 years
+  const _last5Yrs = new Date(_dataDateExtents[1]);
 
-  // add    up total residents affected per calendar month
-  const byMonth = d3.rollups(rows,
-    v => ({ total: d3.sum(v, d => d.affected) }),
-    d => d3.timeMonth(d.date)
-  ).map(([date, vals]) => ({ date, ...vals })).sort((a, b) => a.date - b.date);
+  _last5Yrs.setFullYear(_last5Yrs.getFullYear() - 5);
+  _filteringGroup.call(_filteringBrushXAxis.move, [Math.max(_xFiltering(_last5Yrs), 0), fullWidth]);
+  console.log('testing brush feature')
+
+  // filrted is applied every user update
+  function _filterApplied(event) {
+
+    if (!event.selection) return; // ignore empty
+
+    const [s0, s1] = event.selection; // px position
+    const _convSelection = [_xFiltering.invert(s0), _xFiltering.invert(s1)]; // convert px to date
 
 
-  // console.log('Monthsdata:', byMonth.length);
+
+    // Update main x to selection
+    _x.domain(_convSelection);
+
+    // recalc y based on selection
+    const _updatedVizData = _byMonthRollup.filter(d => d.date >= _convSelection[0] && d.date <= _convSelection[1]);
+    _yMain.domain([0, (d3.max(_updatedVizData, d => d.total) || 1) * 1.08]).nice();
 
 
+    // re draw with the new scales
+    areaPath.attr('d', _areaSetting);
+    linePath.attr('d', _lineSetting);
+    xAxisMain.call(d3.axisBottom(_x).ticks(6).tickFormat(d3.timeFormat('%b %y')));
+    _yAxisAll.call(d3.axisLeft(_yMain).ticks(6).tickFormat(d3.format('.2s')));
+  }
 
-  x.domain(d3.extent(byMonth, d => d.date));
-  y.domain([0, d3.max(byMonth, d => d.total) * 1.08]).nice();
 
-  // axis addition
-  g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
-  g.append('g').call(d3.axisLeft(y).ticks(6).tickFormat(d3.format('.2s')));
+  // merica! tooltips
+  // bisector finds nearesst x value to cursor
+  const _bis = d3.bisector(d => d.date).left;
 
-  // lab
-  g.append('text').attr('x', wid / 2).attr('y', height + 35).attr('text-anchor', 'middle').text('Year');
-  g.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -60).attr('text-anchor', 'middle').text('Residents Affected');
 
-  // fill and lines draw
-  g.append('path').datum(byMonth).attr('fill', 'steelblue').attr('opacity', 0.3).attr('d', _area);
-  g.append('path').datum(byMonth).attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 2).attr('d', supportingLine);
+  _mainG.select('rect[pointer-events="all"]')
+    .on('mousemove', function(event) {
 
-  console.log('Chart rendered');
+      const [_xInSvg] = d3.pointer(event);       // cursor x in SVG
+      const _pxToDate = _x.invert(_xInSvg);              // convert pixel to date
+      const _matchIdx = _bis(_byMonthRollup, _pxToDate);        // index of first point
+
+
+      // find closest point
+      const _close0 = _byMonthRollup[Math.max(0, _matchIdx - 1)];
+      const _close1 = _byMonthRollup[Math.min(_byMonthRollup.length - 1, _matchIdx)];
+      const _trueClosest = !_close0 ? _close1 : !_close1 ? _close0 : _pxToDate - _close0.date < _close1.date - _pxToDate ? _close0 : _close1;
+
+      // hide tooltip outside range
+      const [x0, x1] = _x.domain();
+      if (_trueClosest.date < x0 || _trueClosest.date > x1) { _tt.style('opacity', 0); return; }
+
+      // console.log(`Debug: Tooltip: ${d3.timeFormat('%b %Y')(_trueClosest.date)} `);
+
+      // populate tooltip on cursor
+      _tt
+        .html(`<strong>${d3.timeFormat('%b %Y')(_trueClosest.date)}</strong><br>Affected: ${d3.format(',')(_trueClosest.total)}<br>Breaches: ${_trueClosest.count}`)
+        .style('left', (event.pageX + 12) + 'px')
+        .style('top',  (event.pageY - 30) + 'px')
+        .style('opacity', 1);
+    })
+    .on('mouseleave', () => _tt.style('opacity', 0)); // hide tooltip
+
+  // console.log('Tooltip event listeners attached. Chart ready.');
 });
 
 </script>
@@ -138,11 +261,3 @@ d3.csv(input_file).then(myInput => {
 </body>
 
 </html>
-
-
-
-
-
-
-
-
