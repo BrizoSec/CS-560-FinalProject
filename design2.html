@@ -6,11 +6,10 @@
 
   <meta charset="UTF-8"/>
 
-  <title>Design 2: Categorical Network   </title>
+  <title>Design 2: Categorical Network</title>
 
-
-<!--  // mandatory scripts-->
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
 </head>
 
 <body>
@@ -19,193 +18,273 @@
 
 
 
-<h2>Design 2: Organization Type and Information Type Stolen    </h2>
 
+<h2>Organization Type: Information Type Stolen</h2>
+
+
+<p>Bipartite node-link diagram. Hover nodes or links for more info.</p>
+
+
+<!--main svg-->
 <svg id="cht"></svg>
+
+<!--legend-->
+<div id="legend" style="margin-top:8px;font-size:13px;"></div>
+
+
+
+<div id="tip" style="position:fixed;background:#fff;border:1px solid #555;padding:6px 10px;font-size:12px;pointer-events:none;opacity:0;"></div>
 
 
 <script>
 
+console.log('Design 2: Categorical Network script starting...');
 
 
 
-
-const inputFile = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
-
-
+// data
+const _dataInputFileSource = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
 
 
+// color map for industry
+// industry gets a fixed hue so color is consistent visual encoding
+const IND_COL_MAP = {
+  'Business':   '#e07b54',
+  'Health':     '#56b87a',
+  'Finance':    '#e0a84a',
+  'Education':  '#5b9bd5',
+  'Government': '#a97cd4',
+  'Other':      '#c9a227',
+  'Unknown':    '#888888',
+};
+const _indColorMap = k => IND_COL_MAP[k] || '#888888'; // have a fallback
 
 
-
-// read in data first
-d3.csv(inputFile).then(superInputData => {
-
+// tooltip
+const tip = d3.select('#tip');
 
 
-
-  // console.log('Loaded rws:', superInputData.length);
-
-
-
-
-
-
-  // unique breach IDs per industry
-  const pairMap = new Map();
-  const industryMap  = new Map();
-
-  const infoMap = new Map();
+// module level state mgr
+// declared here so they can be updated in data manipulation callbacks
+let _allLinks = [], _indNodes = [],   _infoNodes = [];
+let _linkGroup, _leftYScale, _rightYScale, _linkWeightSc;
+let _lx, _rx, MX; // x positions of left column, right column, midpoint
 
 
+// load data
+// console.log('Loading CSV..');
+d3.csv(_dataInputFileSource).then(inputRaw => {
+  // console.log(`CSV loaded. Total rows: ${inputRaw.length}`);
 
+  // pairMap:   key "(industry)|||( infoType)" to   breach IDs, total residents
+  // industryMap: industry name  to set of unique breach IDs  left nodes
 
-  superInputData.forEach(row => {
-    const ind  = row.IndustryType?.trim()    || 'Unknown';
-
-    const info = row.InformationType?.trim() ||     'Unknown';
-
-    const id   = row.Id;
-
-
-
-
-    //
-
-
-    const lookupKey = ind + '|||' + info;
+  // infoMap:    info type name  to set of unique breach IDs right nodes
+  const _pairMap     = new Map();
+  const _industryMap   = new Map();
+  const _infoMap     = new Map();
 
 
 
-    // add key
-    if (!pairMap.has(lookupKey)) pairMap.set(lookupKey, { ind, info, ids: new Set() });
+  inputRaw.forEach(r => {
+    const _industry  = r.IndustryType?.trim()    || 'Unknown';
+    const _info = r.InformationType?.trim() || 'Unknown';
+    const _id   = r.Id;
+    const _affected  = +r.WashingtoniansAffected || 0;
 
 
-    // add id
-    pairMap.get(lookupKey).ids.add(id);
+    // key uniquely identifies one (industry + infoType) link
 
+    const _industryInfoKey = _industry + '|||' + _info;
 
-    // safety checks
-    if (!industryMap.has(ind))   industryMap.set(ind, new Set());
-    if (!infoMap.has(info)) infoMap.set(info, new Set());
+    if (!_pairMap.has(_industryInfoKey)) _pairMap.set(_industryInfoKey, { ind: _industry, info: _info, ids: new Set(), aff: 0 });
 
+    const p = _pairMap.get(_industryInfoKey);
 
-    // get added ids
+    if (!p.ids.has(_id)) { p.ids.add(_id); p.aff += _affected; } // count uniques only !
 
-    industryMap.get(ind).add(id);
-    infoMap.get(info).add(id);
+    if (!_industryMap.has(_industry))  _industryMap.set(_industry,  new Set());
+
+    if (!_infoMap.has(_info))     _infoMap.set(_info, new Set());
+
+    _industryMap.get(_industry).add(_id);
+
+    _infoMap.get(_info).add(_id);
+
   });
 
+  // flat maps into plain arrays and sort descending
+  _allLinks  =  Array.from(_pairMap.values()).map(d => ({ source: d.ind, target: d.info, count: d.ids.size, aff: d.aff }));
+  _indNodes  = Array.from(_industryMap.entries()).map(([n, s]) => ({ name: n, count: s.size })).sort((a, b) => b.count - a.count);
+  _infoNodes = Array.from(_infoMap.entries()).map(([n, s]) => ({ name: n, count: s.size })).sort((a, b) => b.count - a.count);
+  // console.log(`Nodes; : ${_indNodes.length}`);
+
+  //
+  _generateSvg();
+  _generateLegend();
+});
 
 
+// svg builder
+// draw all nodes and the initial set of links....
+function _generateSvg() {
 
+  const _rowHeight = 44;   // vertical space between adjacent nodes
+  const _rowCount  = Math.max(_indNodes.length, _infoNodes.length);
+  const _w = 960, H = _rowCount * _rowHeight + 60;
 
+  // left column x,   right column x, (midpoint)
+  _lx = 200; _rx = _w - 200; MX = (_lx + _rx) / 2;
+  // console.log(`SVG: ${_w}. chck`);
 
-  const allConnLinks  = [...pairMap.values()].map(row =>
-          ({ source: row.ind, target: row.info, count: row.ids.size }));
+  const _svg = d3.select('#cht').attr('width', _w).attr('height', H);
 
+  // sqrt scale for node radius to keep nodes acceptable size
+  // scaleSqrt (power scale) API reference:
+  //   https://d3js.org/d3-scale/pow
+  const _rightNodeScale = d3.scaleSqrt()
+    .domain([0, d3.max(_indNodes.concat(_infoNodes), d => d.count)])
+    .range([5, 20]);
 
+  // sq root scale for link stroke width
+  _linkWeightSc = d3.scaleSqrt().domain([0, d3.max(_allLinks, r => r.count)]).range([0.5, 14]);
 
-
-  const industies  = [...industryMap.entries() ].map(([node,s]) =>
-          ({ name: node, count: s.size })).sort((a,b) => b.count-a.count);
-  const infoNodes = [...infoMap.entries()].map(([n,s]) =>
-          ({ name: n, count: s.size })).sort((a,b) => b.count-a.count);
-
-  // console.log('Industrs:', industies.length, 'nodes:',
-  //         infoNodes.length, ''Links:', allConnLinks.length);
-
-  // TODO - will update this later, in a time cruch
-  const ROW_H = 44;
-  const rws  = Math.max(industies.length, infoNodes.length);
-
-  const wid = 962,      height = rws * ROW_H + 60;
-  const leftX = 202,        RX = wid - 200,      MX = (leftX + RX) / 2;
-
-  const _svg = d3.select('#cht').attr('width', wid).attr('height', height);
-
-  // size and link width both use sqrt scale to compress large values down (used from class example)
-  // TODO change hardcoded valuies to variables
-  const rightSideNodeScale
-          = d3.scaleSqrt().domain([0, d3.max([...industies,...infoNodes], row => row.count)]).range([5, 20]);
-  const linkWeightSc  = d3.scaleSqrt().domain([0, d3.max(
-          allConnLinks, d => d.count)]).range([0.5, 14]);
-
-
-
-
-
-  /////////////////////////
-  const leftSideNodeScale  = d3.scalePoint().domain(
-          industies .map(d=>d.name)).range([30, height-20]).padding(0.4);
-  const rightYScale = d3.scalePoint().domain(
-          infoNodes.map(row=>row.name)).range([30, height-20]).padding(0.4);
+  // scalePoint distributes node names evenly along the column height
+  // CITATION; d3.scalePoint API reference:
+  //   https://d3js.org/d3-scale/ordinal#scalePoint
+  _leftYScale  = d3.scalePoint().domain(_indNodes .map(d => d.name)).range([30, H - 20]).padding(0.4);
+  _rightYScale = d3.scalePoint().domain(_infoNodes.map(d => d.name)).range([30, H - 20]).padding(0.4);
 
   // headers
-  _svg.append('text').attr('x', leftX).attr('y', 14)
-          .attr('text-anchor', 'middle').attr('font-size', 12).text('Organization  Type');
-  _svg.append('text').attr('x', RX).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12)
-          .text('Information  Type Stolen');
+  _svg.append('text').attr('x', _lx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).text('Organization Type');
+  _svg.append('text').attr('x', _rx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).text('Information Type Stolen');
 
+  // linkG is a dedicated <g> so render() can update just links
+  _linkGroup =        _svg.append('g');
 
+  // left column is industry nodes
+  _indNodes.forEach(_r => {
+    const _ySetting = _leftYScale(_r.name), r = _rightNodeScale(_r.count);
 
+    const _nodeG = _svg.append('g').attr('transform', `translate(${_lx},${_ySetting})`).style('cursor', 'pointer');
 
+    _nodeG.append('circle').attr('r', r).attr('fill', _indColorMap(_r.name)).attr('opacity', 0.88);
+    _nodeG.append('text').attr('x', -(r + 6)).attr('dy', '0.35em').attr('text-anchor', 'end').attr('font-size', 12).text(_r.name);
 
-  // found cool thing call bezier curve to try
-  // citation: https://stackoverflow.com/questions/60293272/drawing-beziercurve-in-d3-jsok
-  _svg.append('g').selectAll('path')
-    .data(allConnLinks).join('path').attr('fill', 'none').attr('stroke', 'steelblue')
-    .attr('stroke-width', d => linkWeightSc(d.count))
-
-
-    .attr('opacity',    0.3)
-
-    .attr('d', myRow => {
-      const leftS = leftSideNodeScale(myRow.source),       ty = rightYScale(myRow.target);
-      // this is basically the positioning that it uses for ines
-      return `M${leftX},${leftS} C${MX},${leftS} ${MX},${ty} ${RX},${ty}`;
-
-    });
-
-  // nodes on left
-  industies.forEach(_node => {
-    const yCoord    = leftSideNodeScale(_node.name),
-            r = rightSideNodeScale(_node.count);
-
-
-    const transformedGrid = _svg.append('g').attr('transform', `translate(${leftX},${yCoord})`);
-    transformedGrid.append('circle').attr('r', r).attr('fill', 'steelblue');
-    transformedGrid.append('text').attr('x', -(r+6)).attr('dy', '0.35em').attr('text-anchor', 'end').attr('font-size', 12)
-            .text(_node.name);
+    // On hover, highlight connected links
+    _nodeG.on('mouseenter', () => applyHighlighting(_r.name, 'ind'))
+     .on('mouseleave', _resetLinkHighlighting)
+     .on('mousemove', ev => addTt(ev, `<b>${_r.name}</b><br>Breach events: ${applyCommaDelim(_r.count)}`));
   });
 
-  //info types on right
-  infoNodes.forEach(_type => {
-    const yLocation   = rightYScale(_type.name), r = rightSideNodeScale(_type.count);
+  // console.log(`Testing - Left column drawn: ${_indNodes.length} `);
 
-    // positioning
-    const _nodeLoc = _svg.append('g').attr('transform', `translate(${RX},${yLocation})`);
-    _nodeLoc.append('circle').attr('r', r).attr('fill', 'steelblue');
-    _nodeLoc.append('text').attr('x', r+6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(_type.name);
+  // right col is info type nodes
+  _infoNodes.forEach(d => {
+    const _yAxisInfoTypeNodes = _rightYScale(d.name), r = _rightNodeScale(d.count);
+
+    const _groupInfoTypeNodes = _svg.append('g').attr('transform', `translate(${_rx},${_yAxisInfoTypeNodes})`).style('cursor', 'pointer');
+    _groupInfoTypeNodes.append('circle').attr('r', r).attr('fill', 'steelblue').attr('opacity', 0.85);
+    _groupInfoTypeNodes.append('text').attr('x', r + 6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(d.name);
+
+    // . tooltip
+    _groupInfoTypeNodes.on('mouseenter', () => applyHighlighting(d.name, 'info'))
+     .on('mouseleave', _resetLinkHighlighting)
+     .on('mousemove', ev => addTt(ev, `<b>${d.name}</b><br>Breach events: ${applyCommaDelim(d.count)}`));
+  });
+  // console.log(`Right column draws`);
+
+  drawNodes(); // draw links
+}
+
+
+// draw fn
+// Draws all links into linkG
+// Links are colored by industry  and sized by incident count
+function drawNodes() {
+  console.log(`render; links`);
+
+
+  _linkGroup.selectAll('path')
+    .data(_allLinks, _nodeData => _nodeData.source + '|||' + _nodeData.target) // key
+    .join('path').attr('fill', 'none').attr('d', buildBezierLine)
+      .attr('stroke',       d => _indColorMap(d.source))
+      .attr('stroke-width', d => _linkWeightSc(d.count))
+      .attr('opacity', 0.3)
+          // tooltip action
+      .on('mousemove',  (ev, d) => addTt(ev,
+        `<b>${d.source} → ${d.target}</b><br>Incidents: ${applyCommaDelim(d.count)}<br>Residents: ${applyCommaDelim(d.aff)}`))
+      .on('mouseleave', () => tip.style('opacity', 0));
+}
+
+
+// bezier path generator
+// bezier line avoids straight paths
+//  SVG cubic bezier path commands
+//   https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths#curve_commands
+// Bipartite diagram technique
+//   https://observablehq.com/@d3/bipartite-chart
+
+function buildBezierLine(d) {
+  const _sourceY = _leftYScale(d.source), targetY = _rightYScale(d.target);
+  return `M${_lx},${_sourceY} C${MX},${_sourceY} ${MX},${targetY} ${_rx},${targetY}`;
+}
+
+
+// highlighting
+// when hovering a node, raise connected links to full opacity, push unrelated links invisible
+// focus interaction pattern
+//   https://observablehq.com/@d3/focus-context
+
+function applyHighlighting(name, side) {
+  const _isConn = d => side === 'ind' ? d.source === name : d.target === name;
+  _linkGroup.selectAll('path').attr('opacity', d => _isConn(d) ? 0.85 : 0.04);
+}
+
+// reset on mouse off node or link
+function _resetLinkHighlighting() {
+  tip.style('opacity', 0);
+  _linkGroup.selectAll('path').attr('opacity', 0.3);
+}
+
+
+// tooltips - reused
+function addTt(ev, html) {
+  tip.html(html)
+    .style('left',    (ev.clientX + 14) + 'px')
+    .style('top',     (ev.clientY - 12) + 'px')
+    .style('opacity', 1);
+}
+
+// convert value to , delim
+function applyCommaDelim(n) { return d3.format(',')(n); }
+
+
+// legend
+// legend using  inline SVG circles
+function _generateLegend() {
+  const _elem = document.getElementById('legend');
+
+  // One per industry color
+  Object.entries(IND_COL_MAP).forEach(([label, color]) => {
+    const _newSpan = document.createElement('span');
+    _newSpan.innerHTML = `<svg width="12" height="12" style="vertical-align:middle">` +
+                     `<circle cx="6" cy="6" r="5" fill="${color}"/></svg> ${label} &nbsp;&nbsp;`;
+    _elem.appendChild(_newSpan);
   });
 
-  // console.log('- chase');
-});
+  // Separate entry for right-column nodes
+  const _infoSpan = document.createElement('span');
+  _infoSpan.innerHTML = `<svg width="12" height="12" style="vertical-align:middle">` +
+                       `<circle cx="6" cy="6" r="5" fill="steelblue"/></svg> Information Type (right nodes)`;
+  _elem.appendChild(_infoSpan);
+
+  // console.log('Legend built');
+}
+
 
 </script>
 
 </body>
-
-
-
-
-
-
-
-
-
-
-
-
 
 </html>
