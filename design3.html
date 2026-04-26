@@ -6,13 +6,9 @@
 
   <meta charset="UTF-8"/>
 
-  <title>Design 3: Heatmap View of Breaches</title>
+  <title>eatmap View</title>
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
-
-
-
-
 
 </head>
 <body>
@@ -22,180 +18,246 @@
 
 
 
-<h2>Design 3:  Breach Count by Month and Year</h2>
 
 
 
 
+
+
+
+
+<h2>Breach Count by Month and Year</h2>
+
+<p>Calendar heatmap. Hover cells for details.</p>
+
+
+
+<!--svg-->
 <svg id="chart"></svg>
 
 
+
+
+<!--legend-->
+<div>
+  <span id="leg-low"></span>
+
+  <canvas id="grad-canvas" width="200" height="10"></canvas>
+
+  <span id="leg-high"></span>
+
+</div>
+
+<!--tt-->
+<div id="tip" style="position:fixed;background:#fff;border:1px solid #555;padding:6px 10px;font-size:12px;pointer-events:none;opacity:0;"></div>
 
 
 
 <script>
 
 
+// console.log(' Heatmap script starting...');
+
+// as alwayis, input data
+const inputDataRaw = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+
+// months
+const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Date format
+const _parseableDataFormat = d3.timeParse('%m/%d/%Y %I:%M:%S %p');
+
+
+// tt
+const _tt = d3.select('#tip');
+
+
+// state vars
+// Declared at module scope so buildGrid() and drawLegend() can share
+let _cellDataS = [];  // year + month
+let _colorScale;        //  sequential color scale
+
+
+// load data now
+// console.log('Loadin CSV.........');
+d3.csv(inputDataRaw).then(inputRawData => {
+  // console.log(`CSV loaded. Total rows: ${inputRawData.length}`);
+
+  // De-duplicate
+  const _seenIds = new Set();
+  const _rws = [];
 
 
 
-const inputData = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+  inputRawData.forEach(r => {
+    if (_seenIds.has(r.Id)) return; // skip if already in
+
+    _seenIds.add(r.Id);
+
+
+    const _parseable = _parseableDataFormat(r.DateAware);
+    if (!_parseable) return; // skip rows with unparseable  date
 
 
 
-// maybe dont hardcode these, not sure
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',    'Dec'];
+    _rws.push({
+      year:  _parseable.getFullYear(),
+      month: _parseable.getMonth(),
+      aff: +r.WashingtoniansAffected || 0,
 
-
-
-
-const expectedFormat = d3.timeParse('%m/%d/%Y %I:%M:%S %p');
-
-
-
-
-
-
-// first load my data
-
-d3.csv(inputData).then(inputLoadData => {
-  // console.log('Loadeds:',     inputLoadData.length);
-
-  // same as bfore, split on by breach ID
-  const mySeen = new Set();
-
-  const rows = [];
-
-
-
-  // loop over and check
-  inputLoadData.forEach(_item => {
-
-
-
-    if (mySeen.has(_item.Id)) return;
-
-    ///////////////////////
-    mySeen.add(_item.Id);
-
-    const parseable = expectedFormat(_item.DateAware);
-
-    // safety check - skip ones we can't parse
-    if (!parseable) return;
-
-    rows.push({ year: parseable.getFullYear(),     month: parseable.getMonth() });
-
-
+    });
   });
-  console.log('Uniques\n', rows.length);
+  // console.log(`Unique breach records after de-duplication: ${_rws.length}`);
 
 
 
 
-
-
-  // breaches per year and month (cells)
-  const rollupMap = d3.rollups(rows,    v => v.length, yr => yr.year,
-          d => d.month);
-
-
-
-  const resYrs = [...new Set(rows.map(d => d.year))].sort(); //
-
-
-
-  const _workingDta = [];
-
-
-
-
-  // loop over aeach and populate map
-  rollupMap.forEach(([year, months]) =>
-
-    months.forEach(([month, count]) => _workingDta.push({ year, month, count }))
+  // aggregate by month + year
+  // Each cell stores: breach count
+  // CITATION :::: https://d3js.org/d3-array/group#rollups
+  const _rollupMapping = d3.rollups(
+    _rws,
+    v => ({
+      count: v.length,
+      total: d3.sum(v, d => d.aff),
+    }),
+    d => d.year,
+    d => d.month
   );
 
-
-  // console.log('', resYrs, 'Cells:', _workingDta.length);
-
+  const _yrs = Array.from(new Set(_rws.map(d => d.year))).sort();
 
 
 
+  //  plain array of cell objects
+  _rollupMapping.forEach(([year, months]) =>
+    months.forEach(([month, vals]) => _cellDataS.push(Object.assign({ year, month }, vals)))
+  );
+
+  // console.log(`Debug!! Aggregated cells`);
 
 
-  // Sequential scale at first:     more breaches = darker from class
-
-  const scaleForColors = d3.scaleSequential(d3.interpolateBlues).domain([0, d3.max(_workingDta, d => d.count)]);
-
-
-
-
-
-  const chartWidth = 62, CH = 36, padL = 46, padT = 26, padB = 20;
-  const fullW = padL + MONTHS.length * chartWidth + 12;
-
-  //
-  const H = padT + resYrs.length * CH + padB;
-
-  const resSvg = d3.select('#chart').attr('width', fullW).attr('height', H);
+  // color scales
+  // Blues sequential
+  // CITATION d3.scaleSequential ::: https://d3js.org/d3-scale/sequential
+  // CITATION - d3.interpolateBlues ::: https://d3js.org/d3-scale-chromatic/sequential#interpolateBlues
+  _colorScale = d3.scaleSequential(d3.interpolateBlues).domain([0, d3.max(_cellDataS, r => r.count)]);
+  // console.log(`Color scale domain: [0, ${_colorScale.domain()[1]}]`);
 
 
+  constructTable(_yrs);
+  addLegend();
 
-
-
-  //  labels (columns) - month
-  resSvg.selectAll('.mlbl').data(MONTHS).join('text')
-    .attr('x', (d,i) => padL + i*chartWidth + chartWidth/2).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 11).text(d => d);
-
-  // year label on row
-  resSvg.selectAll('.ylbl').data(resYrs).join('text')
-    .attr('x', padL - 6).attr('y', (d,i) => padT + i*CH + CH/2).attr('text-anchor', 'end').attr('dominant-baseline', 'middle').attr('font-size', 11).text(d => d);
-
-
-
-
-
-
-  // background for every cells
-  const allCells = [];
-
-  // for each cell, set the value from dataset
-  resYrs.forEach(y => MONTHS.forEach((m,mi) => allCells.push({ year:y, month:mi, yi:resYrs.indexOf(y) })));
-
-
-  // Background cells
-  resSvg.selectAll('.bg').data(allCells).join('rect')
-    .attr('x', d => padL + d.month*chartWidth + 2).attr('y', d => padT + d.yi*CH + 2)
-    .attr('width', chartWidth-4).attr('height', CH-4).attr('rx', 3).attr('fill', '#ddd');
-
-
-
-
-
-  // add color for populated data
-  ///////////////
-  resSvg.selectAll('.cell').data(_workingDta).join('rect')
-
-    .attr('x', d => padL + d.month*chartWidth + 2).attr('y', row => padT + resYrs.indexOf(row.year)*CH + 2)
-    .attr('width', chartWidth-4).attr('height', CH-4).attr('rx', 3).attr('fill', d => scaleForColors(d.count));
-
-  // console.log('done);
 });
 
 
 
 
+// create a grid
+// month/year axis labels
+// colored data cells for months that have breach records
+//
+function constructTable(yearIpts) {
+
+  const _cw = 62, _ch = 36; // cell width and height
+
+  const _leftPadding = 46, _topPadding = 26, padB = 20; // left, top, bottom padding for labels
+
+  const _wid = _leftPadding + _MONTHS.length * _cw + 12;
+  const _hei = _topPadding + yearIpts.length  * _ch + padB;
+
+  // console.log(`Test`);
+
+
+  const _svg = d3.select('#chart').attr('width', _wid).attr('height', _hei);
+
+  // column headers (top row)
+  _svg.selectAll('.mlbl').data(_MONTHS).join('text')
+    .attr('x', (d, i) => _leftPadding + i * _cw + _cw / 2).attr('y', 14)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', 11).text(d => d);
+
+  //  row labels (left column)
+  _svg.selectAll('.ylbl').data(yearIpts).join('text')
+    .attr('x', _leftPadding - 6)
+    .attr('y', (d, i) => _topPadding + i * _ch + _ch / 2).attr('text-anchor', 'end')
+    .attr('dominant-baseline', 'middle').attr('font-size', 11).text(d => d);
+
+  // Background cells
+  // every cell is visible even if no breach data exists for that month
+  const _allCells = [];
+
+  yearIpts.forEach(y =>
+    _MONTHS.forEach((m, mi) => _allCells.push({ year: y, month: mi, yi: yearIpts.indexOf(y) }))
+  );
+
+  //
+
+  _svg.selectAll('.bg').data(_allCells).join('rect')
+    .attr('x',      d => _leftPadding + d.month * _cw + 2)
+    .attr('y',      d => _topPadding + d.yi    * _ch + 2).attr('width',  _cw - 4)
+    .attr('height', _ch - 4).attr('rx', 3)
+    .attr('fill', '#ddd');
+
+
+  // draw one colored rect per with actual breach records
+  _svg.selectAll('.cell').data(_cellDataS, d => `${d.year}-${d.month}`).join('rect')
+    .attr('x',      d => _leftPadding + d.month * _cw + 2)
+    .attr('y',      d => _topPadding + yearIpts.indexOf(d.year) * _ch + 2)
+    .attr('width',  _cw - 4)
+    .attr('height',   _ch - 4).attr('rx', 3).attr('cursor', 'pointer')
+    .attr('fill',   d => _colorScale(d.count))
+
+          // tooltip action
+    .on('mousemove', (ev, d) => {
+      console.log(`Tooltip: ${_MONTHS[d.month]} ${d.year} :: count: ${d.count}`);
+
+      _tt.html(
+        `<b>${_MONTHS[d.month]} ${d.year}</b><br>` +
+        `Breach events: ${d.count}<br>` +
+        `Residents affected: ${d3.format(',')(d.total)}`
+      )
+
+      .style('left',    (ev.clientX + 14) + 'px')
+      .style('top',     (ev.clientY - 14) + 'px')
+      .style('opacity', 1);
+    })
+          // tt off
+    .on('mouseleave', () => _tt.style('opacity', 0));
+
+  // console.log('Grid ');
+}
 
 
 
 
+// legend
+// horizontal gradient onto the svg
+// the loop paints 200 thin vertical slices, each a slightly darker blue than the last, producing a smooth gradient.
+// Canvas 2D fillRect https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillRect
+// Canvas 2D fillStyle https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle
+// CITATION :: HTMLCanvasElement.getContext https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
+function addLegend() {
+  const _fullCanv = document.getElementById('grad-canvas');
+  const _context    = _fullCanv.getContext('2d');
+  const W = _fullCanv.width, H = _fullCanv.height;
+  const [_low, _high] = _colorScale.domain();
+
+  // fill canvas with gradient
+  for (let i = 0; i < W; i++) {
+    _context.fillStyle = _colorScale(_low + (_high - _low) * i / W); //  across domain
+    _context.fillRect(i, 0, 1, H);
+  }
+
+  document.getElementById('leg-low').textContent  = '0 breaches';
+  document.getElementById('leg-high').textContent = Math.round(_high) + ' breaches';
+
+}
 
 
 </script>
+
+
 </body>
+
 </html>
-
-
-
-
-
