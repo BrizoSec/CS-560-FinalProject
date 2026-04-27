@@ -1,71 +1,56 @@
 <!DOCTYPE html>
 
+
+
 <html lang="en">
 
 <head>
-  
+
   <meta charset="UTF-8"/>
-  
-  <title>Final Design Work in Progress.  WA Data Breach Analysis   </title>
-  
+  <title>Integrated Dashboard :: WA Data Breaches</title>
+
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  
-  
-  
-  
-  
-  
-  
+
+
+
 </head>
+
 <body>
 
 
 
+<h1>Integrated Dashboard</h1>
+<p>Click on the donut slices filter charts.</p>
+
+
+<!--&lt;!&ndash;lin svg -->
+<h3>Monthly Residents Affected </h3>
+
+
+<svg id="line-svg"></svg>
 
 
 
 
-<h1>WA Data Breach Analysis</h1>
+<!--bar plus cause legend-->
+<h3>Breach Events by Year</h3>
+
+<svg id="bar-svg"></svg>
+
+<div id="bar-legend" style="font-size:13px;margin-top:6px;"></div>
 
 
 
+<!--donut legend -->
+<h3>Information Types Compromised</h3>
+<svg id="donut-svg"></svg>
+
+<div id="donut-legend" style="font-size:13px;margin-top:6px;"></div>
 
 
+<!-- tt -->
 
-
-<h2>First Idea: Residents Affected per Month (Area)</h2>
-
-
-
-
-<svg id="basicLine-Svg"></svg>
-
-
-
-
-
-
-
-
-
-<h2>  Breach Events per Year (Bar)</h2>
-
-
-
-
-
-
-<svg id="myBar-svg"></svg>
-
-<h2>Residents Affected by Industry (Treemap)</h2>
-
-
-
-
-<svg id="treemap-svg"></svg>
-
-
-
+<div id="tip" style="position:fixed;background:#fff;border:1px solid #555;padding:6px 10px;font-size:12px;pointer-events:none;opacity:0;"></div>
 
 
 
@@ -74,72 +59,137 @@
 
 
 
-const inputCsv = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+console.log('startup ...');
+
+// data
+const _dataIn = 'Data_Breach_Notifications_Affecting_Washington_Residents__Personal_Information_Breakdown_.csv';
+
+
+// color mapping ....
+// Fixed hue per breach cause
+const CAUSE_COLORS = {
+  'Cyberattack':          '#e07b54',
+  'Unauthorized Access':    '#e0a84a',
+  'Theft or Mistake':          '#5b9bd5',
+  'Unknown':             '#888888',
+};
+
+
+
+// Tableau-10 palette used prof recommendations
+const _INFO_COLOR_PAL = d3.schemeTableau10;
+
+
+// tip handle
+const _tt = d3.select('#tip');
+
+
+
+
+// filter states
+//
+// null is no filter on
+
+let _filterCs    = null;
+let _filterInfoT = null; // like 'Social Security Number'
+
+
+// global data
+let _allBreachData = []; // de-duplicated rows
+let _infoTypeAll = []; // top info types
+let _infoColorMapping;     // Map<string, color> for donut slices
 
 
 
 
 
-// read in data
-d3.csv(inputCsv).then(rawIn => {
-  // console.log('Loaded:', rawIn.length);
 
 
 
 
-  // separateby breach ID
-  const mySeen    = new Set();
-  const _rowsData = [];
+// load
+console.log('Loading');
+const timeParseableCheck = d3.timeParse('%m/%d/%Y %I:%M:%S %p');
+
+d3.csv(_dataIn).then(
+        raw => {
 
 
-  // load
-  rawIn.forEach(row => {
-
-
-    // init
-    if (mySeen.has(row.Id)) return;
-
-
-    //
-    mySeen.add(row.Id);
+  console.log(`CSV loaded. `);
 
 
 
-    const validDate =   d3.timeParse('%m/%d/%Y %I:%M:%S %p')(row.DateAware);
+  // Deduplicate by breach Id
+  const _seenID = new Set();
+
+  raw.forEach(r => {
+
+    // safety
+    if (_seenID.has(r.Id)) return;
+
+    _seenID.add(r.Id);
+
+    const _foundDate = timeParseableCheck(r.DateAware);
+
+    // safety
+    if (!_foundDate) return;
 
 
-    // safety, return if not valid format
-    if (!validDate) return;
-
-
-
-    // add to map
-    _rowsData.push({
-
-      date: validDate,
-
-      year:     validDate.getFullYear(),
-      month:    d3.timeMonth(validDate),
-
-      aff:      +row.WashingtoniansAffected || 0,
-
-      industry: row.IndustryType?.trim() || 'Unknown',
-
+    // add data
+    _allBreachData.push({
+      id:       r.Id,
+      date: _foundDate,
+      year:     _foundDate.getFullYear(),
+      month:    d3.timeMonth(_foundDate),            // floored to 1st of month :: rollup key citation: https://d3js.org/d3-time#timeMonth
+      cause:    r.DataBreachCause?.trim()  || 'Unknown',
+      aff:      +r.WashingtoniansAffected  || 0,
     });
 
   });
-
-  // console.log('Unique - Checking:', _rowsData.length);
-
+  // console.log(`Chase CHeck 1`);
 
 
 
 
-  // build all the graphs in one shot
+  // info type index uses all  raw rows
+  // count unique ids
+  const _infoMap = new Map();
 
-  genLineGraph(_rowsData);
-  generateBar(_rowsData);
-  generateTreemap(_rowsData);
+
+
+
+  raw.forEach(r => {
+    const info = r.InformationType?.trim() || 'Unknown';
+
+    // init
+    if (!_infoMap.has(info)) _infoMap.set(info, new Set());
+
+
+    _infoMap.get(info).add(r.Id);
+  });
+
+
+  // Keep top 10 , too many to include by default
+
+  _infoTypeAll = Array.from(_infoMap.entries())
+    .map(([info, ids]) => ({ info, count: ids.size, ids })).sort((a, b) => b.count - a.count)
+    .slice(0, 9);
+
+
+  _infoColorMapping = new Map(_infoTypeAll.map((d, i) => [d.info, _INFO_COLOR_PAL[i]]));
+  console.log('Info types', _infoTypeAll.map(d => d.info));
+
+
+
+
+  // all four charts, then run the first full update
+  createLine();
+
+  createBar();
+  createDonut();
+
+
+  manageState();
 
 
 
@@ -147,227 +197,378 @@ d3.csv(inputCsv).then(rawIn => {
 
 
 
+// sum up fields
+// sums residents affected per calendar month - used by line and filtered
 
+function sumMonthlyVals(rows) {
 
-
-
-
-//  residents affected per month
-function genLineGraph(rows) {
-
-
-
-
-
-
-  // add    up total residents affected
-  const totalByMonth = d3.rollups(rows, v =>
-          d3.sum(v, d => d.aff), d => d.month)
-
-
-    .map(([date, total]) => ({ date, total }))
-    .sort((a, b) => a.date - b.date); // sort for aesthetic
-
-
-  console.log('Monthly     :', totalByMonth.length);
-
-
-
-
-  // todo change to dynamic spacing on screen
-  const _margin = { top: 20, right: 20,       bottom: 42, left: 82 };
-  const width = 902 - _margin.left - _margin.right;
-  const height = 301 -     _margin.top - _margin.bottom;
-
-
-
-
-
-  const fullSvg = d3.select('#basicLine-Svg')
-    .attr('width',    width + _margin.left + _margin.right).attr('height', height + _margin.top + _margin.bottom);
-
-
-
-  // group
-  const g = fullSvg.append('g').attr('transform', `translate(${_margin.left},${_margin.top})`);
-
-
-
-
-
-  const x = d3.scaleTime().domain(d3.extent(totalByMonth, row => row.date)).range([0, width]);
-  const y =     d3.scaleLinear().domain([0, d3.max(totalByMonth, row => row.total)]).range([height, 0]).nice();
-
-  // axis
-
-
-  //////////
-  g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
-  g.append('g').call(d3.axisLeft(y).ticks(8).tickFormat(d3.format('.2s')));
-
-  // labels
-  // translation
-  g.append('text').attr('x', width / 2).attr('y', height + 35).attr('text-anchor', 'middle').text('Year');
-  g.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -65).attr('text-anchor', 'middle').text('Residents Affected');
-
-
-
-
-
-
-  // fill area
-  const area_fill = d3.area().x(d => x(d.date)).y0(height).y1(d => y(d.total)).curve(d3.curveMonotoneX);
-  g.append('path').datum(totalByMonth).attr('fill', 'steelblue').attr('opacity', 0.3).attr('d', area_fill);
-
-
-
-
-  // my line
-  const _line = d3.line().x(row => x(row.date)).y(d => y(d.total)).curve(d3.curveMonotoneX);
-  g.append('path').datum(totalByMonth).attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 2).attr('d', _line);
-
-  // console.log('test');
+  // citation: https://d3js.org/d3-array/group#rollups
+  return d3.rollups(rows, v => d3.sum(v, _r => _r.aff), d => d.month)
+    .map(([date, total]) => ({ date, total })).sort((a, b) => a.date - b.date);
 }
 
 
 
 
 
-// now bar chart - breach counts
 
-function generateBar(rows) {
-  // per year totals
-  const perYearTotals = d3.rollups(rows, v => v.length, d => d.year).map(([year, count]) => ({ year, count }))
-    .sort((a, b) => a.year - b.year);
+// filtered rows
+// all currently active filter dimensions -  update cycle starts here so all charts start at same data settings
+function _applyFilters() {
+  let _rv = _allBreachData;
 
+  if (_filterCs)    _rv = _rv.filter(d => d.cause === _filterCs);
 
+  // info type filter
+  if (_filterInfoT) {
+    const _matchingEntry = _infoTypeAll.find(d => d.info === _filterInfoT);
 
-  const marg = { top: 22, right: 24, bottom: 42, left: 62 };
+    //
+    if (_matchingEntry) _rv = _rv.filter(d => _matchingEntry.ids.has(d.id));
+  }
 
-
-
-  const width = 900   - marg.left - marg.right;
-  const height = 280   - marg.top - marg.bottom;
-
-  const _svg = d3.select('#myBar-svg')
-    .attr('width', width + marg.left +    marg.right).attr('height', height + marg.top + marg.bottom);
-
-
-  // transforms
-  const g = _svg.append('g').attr('transform', `translate(${marg.left},${marg.top})`);
-
-
-
-  // Scales
-  const x = d3.scaleBand().domain(perYearTotals.map(row => row.year)).range([0, width]).padding(0.2);
-  const y = d3.scaleLinear().domain([0, d3.max(perYearTotals, row => row.count)]).range([height, 0]).nice();
+  return _rv;
+}
 
 
 
 
+// state update
+// on filter change, Computes filtered rows once, passes the same subset to charts
+function manageState() {
 
-  // axis
-  g.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(x).tickFormat(d3.format('d')));
+  const _dataRowsActive = _applyFilters();
 
-  g.append('g').call(d3.axisLeft(y).ticks(8));
+  // console.log(`updateAll() calld`);
 
-  // labels
+  updateLineChart(_dataRowsActive);
+  updateBarChart(_dataRowsActive);
 
-  g.append('text').attr('x', width / 2).attr('y', height + 35).attr('text-anchor', 'middle')
-          .text('Year');
-  g.append('text').attr('transform', 'rotate(-90)').attr('x', -height / 2).attr('y', -45).attr('text-anchor', 'middle').text('Breach Incidents');
-
-
-
-  // add bar charts
-  g.selectAll('rect').data(perYearTotals).join('rect')
-    .attr('x', row => x(row.year)).attr('y', d => y(d.count))
-    .attr('width', x.bandwidth())
-    .attr('height', row => height - y(row.count)).attr('fill', 'steelblue').attr('opacity', 0.8);
+  updateDonutChart();    // no change here for obvious reasons
+}
 
 
 
+// now line chart
+// updateLineChart() binds data and redraws after filtering
 
+function createLine() {
+
+  const _sizeSettings = { top: 20, right: 20, bottom: 42, left: 82 };
+
+  const W0 = 900, _h = 200;
+
+  const _finalWidth  = W0 - _sizeSettings.left - _sizeSettings.right;
+
+
+  const _lineSvg = d3.select('#line-svg')
+    .attr('width', W0).attr('height', _h + _sizeSettings.top + _sizeSettings.bottom);
+
+
+
+  // clip path enforces min / max
+  // citation : https://observablehq.com/@eesur/svg-clippath-using-d3 which helped me get started
+  _lineSvg.append('defs').append('clipPath').attr('id', 'line-clip').append('rect').attr('width', _finalWidth).attr('height', _h);
+
+
+
+
+  const _lineGrp = _lineSvg.append('g').attr('transform', `translate(${_sizeSettings.left},${_sizeSettings.top})`);
+  _lineG = _lineGrp;
+
+
+  _lnX = d3.scaleTime().range([0, _finalWidth]);
+  _lnY = d3.scaleLinear().range([_h, 0]);
+
+
+  // curveMonotoneX gives a smooth line that preserves monotonicity
+  // citation: https://d3js.org/d3-shape/curve#curveMonotoneX
+  // citation: https://d3js.org/d3-shape/area
+  _lineAreaGenerator = d3.area().x(d => _lnX(d.date)).y0(_h).y1(d => _lnY(d.total)).curve(d3.curveMonotoneX);
+  _lineLineGenerator = d3.line().x(d => _lnX(d.date)).y(d => _lnY(d.total)).curve(d3.curveMonotoneX);
+
+
+  // data is bound in chart updater
+  _lineGrp.append('path').attr('class', 'line-area').attr('opacity', 0.3).attr('clip-path', 'url(#line-clip)');
+  _lineGrp.append('path').attr('class', 'line-stroke').attr('fill', 'none').attr('stroke-width', 2).attr('clip-path', 'url(#line-clip)');
+
+
+
+  // axis groups
+  _lineGrp.append('g').attr('class', 'x-axis').attr('transform', `translate(0,${_h})`);
+  _lineGrp.append('g').attr('class', 'y-axis');
+
+
+
+  _lineGrp.append('text').attr('x', _finalWidth / 2).attr('y', _h + 35).attr('text-anchor', 'middle').text('Year');
+  _lineGrp.append('text').attr('transform', 'rotate(-90)').attr('x', -_h / 2).attr('y', -68).attr('text-anchor', 'middle').text('Residents Affected');
+
+
+  // console.log('Line chart done.');
 }
 
 
 
 
 
-// lastly, treemap of affected residents
-function generateTreemap(rows) {
-  // ''
-  //  residents affected per industry
+// line updater
+// binds filtered monthly data and redraws paths
+// The x/y domain always spans the full dataset so the axis never changes
+function updateLineChart(rows) {
+
+  const _allData         = sumMonthlyVals(_allBreachData);
 
 
-
-  const industrySums =    d3.rollups(rows, v => d3.sum(v, _rows => _rows.aff),
-          d => d.industry)
-
-    .map(([industry, total]) => ({ industry, total })) // convert to plain objects
-    .filter(d => d.total > 0) // remove empties
-
-    .sort((a, b) => b.total - a.total);
+  const _summed = sumMonthlyVals(rows.length ? rows : _allBreachData);
 
 
-  console.log('Industry -     ', industrySums.length);
+  
 
-  const treeMapWid = 902, tHeight = 320;
-
-
-
+  _lnX.domain(d3.extent(_allData, d => d.date));
+  _lnY.domain([0, d3.max(_allData, d => d.total) * 1.08]).nice(); //
 
 
-  const treeMapSvg = d3.select('#treemap-svg').attr('width', treeMapWid).attr('height', tHeight);
+  //  match the selected info type, otherwise use def
+  const color = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : 'gray';
 
-  // layout
-  const baseLayout = d3.hierarchy({ children: industrySums.map(row => ({ name: row.industry, value: row.total })) })
-
-          //
-    .sum(d => d.value)
-    .sort((a, b) => b.value - a.value);
+  // .datum binds a single value to the selection https://d3js.org/d3-selection/joining#selection_datum
+  _lineG.select('.line-area').datum(_summed).attr('d', _lineAreaGenerator).attr('fill', color);
+  _lineG.select('.line-stroke').datum(_summed).attr('d', _lineLineGenerator).attr('stroke', color);
 
 
-  // set size layout
-  d3.treemap().size([treeMapWid, tHeight]).padding(2).round(true)(baseLayout);
+  // axes
 
-  const _treemapColors = d3.scaleOrdinal(d3.schemeTableau10);
-
-
-
-
-  const treeMapCells    = treeMapSvg.selectAll('g').data(baseLayout.leaves()).join('g')
-    .attr('transform', d => `translate(${d.x0},${d.y0})`);
-
-  // add cells as rectangles
-  // console.log()
-  treeMapCells.append('rect').attr('width',  _r  => _r.x1 - _r.x0).attr('height', d => d.y1 - d.y0)
-
-
-          .attr('fill',   _rows => _treemapColors(_rows.data.name))
-    .attr('opacity', 0.8).attr('stroke', '#fff');
-
-
-
-
-  // add labels when spaced properly
-  treeMapCells.append('text')
-    .attr('x', 4).attr('y', 13).attr('font-size', 11).text(val => (val.x1 - val.x0) > 50 ? val.data.name : '');
-
-  // console.log('done');
+  _lineG.select('.x-axis').call(d3.axisBottom(_lnX).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
+  _lineG.select('.y-axis').call(d3.axisLeft(_lnY).ticks(6).tickFormat(d3.format('.2s')));
+  
 }
+
+
+
+
+// one bar per year 
+// color follows the selected info type ....
+function createBar() {
+  
+  
+  const _marg = { top: 10, right: 20, bottom: 42, left: 52 };
+  const W0 = 900, H = 200;
+  const _fullWidth  = W0 - _marg.left - _marg.right;
+
+  
+  const _barSvg = d3.select('#bar-svg')
+    .attr('width', W0)
+    .attr('height', H + _marg.top + _marg.bottom);
+
+  
+  
+  const _barGroup = _barSvg.append('g').attr('transform', `translate(${_marg.left},${_marg.top})`);
+  
+  _barG = _barGroup;
+
+  
+  
+  // x/y scales
+  _barX = d3.scaleBand().range([0, _fullWidth]).padding(0.18);
+  _barY = d3.scaleLinear().range([H, 0]);
+
+  // axes
+  _barGroup.append('g').attr('class', 'x-axis').attr('transform', `translate(0,${H})`);
+  _barGroup.append('g').attr('class', 'y-axis');
+  _barGroup.append('text').attr('x', _fullWidth / 2).attr('y', H + 35).attr('text-anchor', 'middle').text('Year');
+  _barGroup.append('text').attr('transform', 'rotate(-90)').attr('x', -H / 2).attr('y', -42).attr('text-anchor', 'middle').text('Breach Events');
+
+  // cause of breach - allows click 
+  const _baseLegend = document.getElementById('bar-legend');
+  
+  
+  // 
+  Object.entries(CAUSE_COLORS).forEach(([label, color]) => {
+    
+    const _addedSpanTag = document.createElement('span');
+    
+    _addedSpanTag.style.cursor = 'pointer';
+    
+    _addedSpanTag.innerHTML =
+      `<svg width="12" height="12" style="vertical-align:middle">` +
+      `<rect width="11" height="11" rx="2" fill="${color}"/></svg> ${label} &nbsp;&nbsp;`;
+    
+    
+    _addedSpanTag.addEventListener('click', () => {
+      _filterCs = _filterCs === label ? null : label; // toggle
+      console.log(`filterCause = ${_filterCs}`);
+      manageState(); // update state on click 
+    });
+    
+    
+    _baseLegend.appendChild(_addedSpanTag);
+  });
+  
+  
+  // console.log('Bar chart debugger ');
+}
+
+// now update bar on clicks 
+function updateBarChart(_rws) {
+  // show all years on x axis so bars don't disappear
+  
+  
+  const _yrs = [...new Set(_allBreachData.map(d => d.year))].sort();
+  _barX.domain(_yrs);
+  
+  
+
+  const _cntByYear = d3.rollup(_rws, v => v.length, d => d.year);
+  _barY.domain([0, d3.max(_yrs, y => _cntByYear.get(y) || 0) * 1.12 || 1]).nice();
+
+  // default to gray 
+  const _col = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : 'gray';
+
+ //
+  _barG.selectAll('.bar').data(_yrs, d => d)
+    .join(
+      enter => enter.append('rect').attr('class', 'bar'),
+      update => update,
+      exit   => exit.remove()
+    ).attr('x',       y => _barX(y))
+    .attr('width',   _barX.bandwidth())
+    .attr('y',       y => _barY(_cntByYear.get(y) || 0))
+    .attr('height',  y => Math.max(0, _barY(0) - _barY(_cntByYear.get(y) || 0)))
+    .attr('fill',    _col)
+    .attr('opacity', 0.85)
+          // tooltip
+    .on('mousemove', (ev, y) => {
+      const count = _cntByYear.get(y) || 0;
+      _tt.html(`<b>${y}</b><br>Events: ${d3.format(',')(count)}`)
+         .style('left', (ev.clientX + 12) + 'px')
+         .style('top',  (ev.clientY - 12) + 'px')
+         .style('opacity', 1);
+    }) 
+          // tooltip
+    .on('mouseleave', () => _tt.style('opacity', 0));
+
+
+  // axes
+  _barG.select('.x-axis').call(d3.axisBottom(_barX).tickFormat(d3.format('d')));
+  _barG.select('.y-axis').call(d3.axisLeft(_barY).ticks(5));
+
+
+  console.log(`Bar chart updated::  ${_yrs.length} years`);
+}
+
+
+
+
+// finally donut - key to it all !!!!
+// Shows  types as arc proportions. no filtering
+// clicking a slice sets filterInfoType; clicking again clears
+
+
+function createDonut() {
+
+  const _r = 120;
+  const _width = _r * 2 + 20, _Height = _r * 2 + 20;
+
+  const _donutSvg = d3.select('#donut-svg').attr('width', _width).attr('height', _Height);
+  //
+
+  _donutG = _donutSvg.append('g').attr('transform', `translate(${_width / 2},${_Height / 2})`);
+
+
+
+  // arc() builds SVG path data for pie slices https://d3js.org/d3-shape/arc
+  // d3.pie() computes start/end angles from data values -  https://d3js.org/d3-shape/pie
+  _donutArc = d3.arc().innerRadius(0).outerRadius(_r);
+
+  _donutPie = d3.pie().value(d => d.count).sort(null);      // sort preserves original order
+
+
+
+  // info type  legend :: same colors as the slices
+  const _leg = document.getElementById('donut-legend');
+
+
+  //
+  _infoTypeAll.forEach((d, i) => {
+
+    const _addedSpan = document.createElement('span');
+
+
+    _addedSpan.style.cursor = 'pointer';
+    //
+    _addedSpan.innerHTML =
+      `<svg width="12" height="12" style="vertical-align:middle">` +
+      `<rect width="11" height="11" rx="2" fill="${_INFO_COLOR_PAL[i]}"/></svg> ${d.info} &nbsp;&nbsp;`;
+
+
+    _addedSpan.addEventListener('click', () => {
+      _filterInfoT = _filterInfoT === d.info ? null : d.info;
+      console.log(`filterInfoType = ${_filterInfoT}`);
+      manageState(); // update state
+    });
+
+
+    _leg.appendChild(_addedSpan);
+
+  });
+  // console.log('Donut');
+}
+
+// update bar on click
+function updateDonutChart() {
+
+  const _pieArcs = _donutPie(_infoTypeAll);
+
+  //
+  _donutG.selectAll('path').data(_pieArcs, d => d.data.info)
+    .join(
+      enter => enter.append('path')
+        .attr('fill',   d => _infoColorMapping.get(d.data.info))
+        .attr('stroke', '#fff').attr('stroke-width', 1).attr('cursor', 'pointer')
+              // on click
+        .on('click', (ev, d) => {
+          // toggle
+          _filterInfoT = _filterInfoT === d.data.info ? null : d.data.info;
+          console.log(`filterInfoType = ${_filterInfoT}`);
+          manageState();
+        })
+              // tooltip
+        .on('mousemove', (ev, d) => {
+          // arc angle span over full circle = slice percent https://d3js.org/d3-shape/pie#pie-angles
+          const pct = ((d.endAngle - d.startAngle) / (2 * Math.PI) * 100).toFixed(1);
+          _tt.html(`<b>${d.data.info}</b><br>Incidents: ${d3.format(',')(d.data.count)}<br>Share: ${pct}%`)
+             .style('left', (ev.clientX + 12) + 'px')
+             .style('top',  (ev.clientY - 12) + 'px')
+             .style('opacity', 1);
+        })
+              // tooltip
+        .on('mouseleave', () => _tt.style('opacity', 0)),
+      update => update,
+      exit   => exit.remove()
+    )
+          // update
+    .attr('d', _donutArc)
+
+
+    // dim all non-selected slices
+
+    .attr('opacity', d => _filterInfoT ? (d.data.info === _filterInfoT ? 1 : 0.2) : 1);
+
+  console.log('check 67667');
+}
+
+
+
+
+
+
+
+
+
 
 </script>
+
 </body>
-
-
-
-
-
-
-
-
-
 
 
 </html>
