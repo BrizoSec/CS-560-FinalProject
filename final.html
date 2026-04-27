@@ -79,9 +79,6 @@ const _tt = d3.select('#tip');
 
 // filter states
 //
-// null is no filter on
-
-let _filterCs    = null;
 let _filterInfoT = null; // like 'Social Security Number'
 
 
@@ -214,8 +211,6 @@ function sumMonthlyVals(rows) {
 //
 function _applyFilters() {
   let _rv = _allBreachData;
-
-  if (_filterCs)    _rv = _rv.filter(d => d.cause === _filterCs);
 
   // info type filter
   if (_filterInfoT) {

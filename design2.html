@@ -172,7 +172,7 @@ function _generateSvg() {
     _nodeG.append('text').attr('x', -(r + 6)).attr('dy', '0.35em').attr('text-anchor', 'end').attr('font-size', 12).text(_r.name);
 
     // On hover, highlight connected links
-    _nodeG.on('mouseenter', () => applyHighlighting(_r.name, 'ind'))
+    _nodeG.on('mouseenter', () => applyHighlighting(_r.name))
      .on('mouseleave', _resetLinkHighlighting)
      .on('mousemove', ev => addTt(ev, `<b>${_r.name}</b><br>Breach events: ${applyCommaDelim(_r.count)}`));
   });
@@ -236,9 +236,8 @@ function buildBezierLine(d) {
 // focus interaction pattern
 //   https://observablehq.com/@d3/focus-context
 
-function applyHighlighting(name, side) {
-  const _isConn = d => side === 'ind' ? d.source === name : d.target === name;
-  _linkGroup.selectAll('path').attr('opacity', d => _isConn(d) ? 0.85 : 0.04);
+function applyHighlighting(name) {
+  _linkGroup.selectAll('path').attr('opacity', d => d.source === name ? 0.85 : 0.04);
 }
 
 // reset on mouse off node or link
