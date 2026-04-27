@@ -54,6 +54,7 @@ const IND_COL_MAP = {
   'Finance':    '#e0a84a',
   'Education':  '#5b9bd5',
   'Government': '#a97cd4',
+  'Non-Profit/Charity': '#d4c44a',
   'Other':      '#c9a227',
   'Unknown':    '#888888',
 };
@@ -159,6 +160,9 @@ function _generateSvg() {
   _svg.append('text').attr('x', _lx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).text('Organization Type');
   _svg.append('text').attr('x', _rx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).text('Information Type Stolen');
 
+  // TODO: add a slider or input to filter down to top industries
+  // TODO: add a highlighting on the edges when you hover over a node (would be cool)
+
   // linkG is a dedicated <g> so render() can update just links
   _linkGroup =        _svg.append('g');
 
@@ -171,9 +175,7 @@ function _generateSvg() {
     _nodeG.append('circle').attr('r', r).attr('fill', _indColorMap(_r.name)).attr('opacity', 0.88);
     _nodeG.append('text').attr('x', -(r + 6)).attr('dy', '0.35em').attr('text-anchor', 'end').attr('font-size', 12).text(_r.name);
 
-    // On hover, highlight connected links
-    _nodeG.on('mouseenter', () => applyHighlighting(_r.name))
-     .on('mouseleave', _resetLinkHighlighting)
+    _nodeG.on('mouseleave', () => tip.style('opacity', 0))
      .on('mousemove', ev => addTt(ev, `<b>${_r.name}</b><br>Breach events: ${applyCommaDelim(_r.count)}`));
   });
 
@@ -184,7 +186,7 @@ function _generateSvg() {
     const _yAxisInfoTypeNodes = _rightYScale(d.name), r = _rightNodeScale(d.count);
 
     const _groupInfoTypeNodes = _svg.append('g').attr('transform', `translate(${_rx},${_yAxisInfoTypeNodes})`).style('cursor', 'pointer');
-    _groupInfoTypeNodes.append('circle').attr('r', r).attr('fill', 'steelblue').attr('opacity', 0.85);
+    _groupInfoTypeNodes.append('circle').attr('r', r).attr('fill', 'gray').attr('opacity', 0.85);
     _groupInfoTypeNodes.append('text').attr('x', r + 6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(d.name);
 
     // . tooltip
@@ -231,20 +233,7 @@ function buildBezierLine(d) {
 }
 
 
-// highlighting
-// when hovering a node, raise connected links to full opacity, push unrelated links invisible
-// focus interaction pattern
-//   https://observablehq.com/@d3/focus-context
 
-function applyHighlighting(name) {
-  _linkGroup.selectAll('path').attr('opacity', d => d.source === name ? 0.85 : 0.04);
-}
-
-// reset on mouse off node or link
-function _resetLinkHighlighting() {
-  tip.style('opacity', 0);
-  _linkGroup.selectAll('path').attr('opacity', 0.3);
-}
 
 
 // tooltips - reused
@@ -275,7 +264,7 @@ function _generateLegend() {
   // Separate entry for right-column nodes
   const _infoSpan = document.createElement('span');
   _infoSpan.innerHTML = `<svg width="12" height="12" style="vertical-align:middle">` +
-                       `<circle cx="6" cy="6" r="5" fill="steelblue"/></svg> Information Type (right nodes)`;
+                       `<circle cx="6" cy="6" r="5" fill="gray"/></svg> Information Type (right nodes)`;
   _elem.appendChild(_infoSpan);
 
   // console.log('Legend built');

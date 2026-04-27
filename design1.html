@@ -194,7 +194,7 @@ d3.csv(data_input_file).then(_inputData => {
 
 
 
-  // Default to last 5 years
+  // TODO:    add a reset button to reset to all yrs
   const _last5Yrs = new Date(_dataDateExtents[1]);
 
   _last5Yrs.setFullYear(_last5Yrs.getFullYear() - 5);
@@ -226,6 +226,8 @@ d3.csv(data_input_file).then(_inputData => {
     _yAxisAll.call(d3.axisLeft(_yMain).ticks(6).tickFormat(d3.format('.2s')));
   }
 
+
+  // TODO: annotate notable spikes (e.g. large single-breach events) directly on the chart
 
   // merica! tooltips
   // bisector finds nearesst x value to cursor
