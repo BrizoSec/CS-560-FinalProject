@@ -37,7 +37,6 @@
 
 <svg id="bar-svg"></svg>
 
-<div id="bar-legend" style="font-size:13px;margin-top:6px;"></div>
 
 
 
@@ -66,14 +65,6 @@ const _dataIn = 'Data_Breach_Notifications_Affecting_Washington_Residents__Perso
 
 
 // color mapping ....
-// Fixed hue per breach cause
-const CAUSE_COLORS = {
-  'Cyberattack':          '#e07b54',
-  'Unauthorized Access':    '#e0a84a',
-  'Theft or Mistake':          '#5b9bd5',
-  'Unknown':             '#888888',
-};
-
 
 
 // Tableau-10 palette used prof recommendations
@@ -214,6 +205,13 @@ function sumMonthlyVals(rows) {
 
 // filtered rows
 // all currently active filter dimensions -  update cycle starts here so all charts start at same data settings
+// the coordinated filtering design below (ID-join via _infoMap + single filtered subset passed to all charts)
+// was built with help from generative ai
+// steps: 1 - build _infoMap for wtores the breach ids for each info type (SS # for example)
+// step 2 - when applying filters, look up the breach ids for the selected info type and then filter _allBreachData for those IDs
+// step 3 - _applyFilters runs and gives the results to the bar and line chart updaters, so everything updates at once (donut is exempt)
+// key is that the dataset has multiple rows per ID b/c there are multiple info types, we need to get distinct count and use ID to do cross dataset lookups
+//
 function _applyFilters() {
   let _rv = _allBreachData;
 
@@ -378,32 +376,6 @@ function createBar() {
   _barGroup.append('text').attr('x', _fullWidth / 2).attr('y', H + 35).attr('text-anchor', 'middle').text('Year');
   _barGroup.append('text').attr('transform', 'rotate(-90)').attr('x', -H / 2).attr('y', -42).attr('text-anchor', 'middle').text('Breach Events');
 
-  // cause of breach - allows click 
-  const _baseLegend = document.getElementById('bar-legend');
-  
-  
-  // 
-  Object.entries(CAUSE_COLORS).forEach(([label, color]) => {
-    
-    const _addedSpanTag = document.createElement('span');
-    
-    _addedSpanTag.style.cursor = 'pointer';
-    
-    _addedSpanTag.innerHTML =
-      `<svg width="12" height="12" style="vertical-align:middle">` +
-      `<rect width="11" height="11" rx="2" fill="${color}"/></svg> ${label} &nbsp;&nbsp;`;
-    
-    
-    _addedSpanTag.addEventListener('click', () => {
-      _filterCs = _filterCs === label ? null : label; // toggle
-      console.log(`filterCause = ${_filterCs}`);
-      manageState(); // update state on click 
-    });
-    
-    
-    _baseLegend.appendChild(_addedSpanTag);
-  });
-  
   
   // console.log('Bar chart debugger ');
 }

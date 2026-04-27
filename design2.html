@@ -188,8 +188,8 @@ function _generateSvg() {
     _groupInfoTypeNodes.append('text').attr('x', r + 6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(d.name);
 
     // . tooltip
-    _groupInfoTypeNodes.on('mouseenter', () => applyHighlighting(d.name, 'info'))
-     .on('mouseleave', _resetLinkHighlighting)
+    _groupInfoTypeNodes
+     .on('mouseleave', () => tip.style('opacity', 0))
      .on('mousemove', ev => addTt(ev, `<b>${d.name}</b><br>Breach events: ${applyCommaDelim(d.count)}`));
   });
   // console.log(`Right column draws`);
