@@ -11,6 +11,8 @@
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
   <style>
+
+    /*target every element on page*/
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: #0d1117; color: #c9d1d9;
@@ -20,7 +22,7 @@
     h2 { font-size: 1.3rem; font-weight: 600; color: #e6edf3; margin-bottom: 6px; }
     p  { font-size: 0.84rem; color: #8b949e; margin-bottom: 14px; }
 
-    .controls {
+    .slideLinkCntrl {
       display: flex; align-items: center; gap: 8px;
       font-size: 0.8rem; color: #8b949e; margin-bottom: 12px;
     }
@@ -34,6 +36,9 @@
     svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #c9d1d9; }
 
     #legend { margin-top: 10px; font-size: 0.78rem; color: #8b949e; display: flex; flex-wrap: wrap; gap: 10px; }
+
+
+
 
     #tip {
       position: fixed; background: #1c2128; border: 1px solid #388bfd;
@@ -59,7 +64,7 @@
 
 
 <!-- adding a slider to filter on minimum incidents by count -->
-<div class="controls">
+<div class="slideLinkCntrl">
   <span>Min incidents per link:</span>
   <input type="range" id="min-node-count" min="1" max="30" value="1" style="width:100px"/>
   <span id="min-node-label">1</span>
