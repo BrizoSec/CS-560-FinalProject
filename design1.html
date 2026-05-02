@@ -17,6 +17,50 @@
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
+  <style>
+
+    /*// all element formatting*/
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+
+
+
+    body {
+      background: #0d1117; color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 24px 32px;
+    }
+
+    h2 { font-size: 1.3rem; font-weight: 600; color: #e6edf3; margin-bottom: 6px; }
+    p  { font-size: 0.84rem; color: #8b949e; margin-bottom: 14px; }
+
+
+
+    .stats { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+    .stat-card {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 6px; padding: 12px 18px; flex: 1; min-width: 140px;
+    }
+
+
+    .stat-card .label { font-size: 0.72rem; text-transform: uppercase; color: #8b949e; margin-bottom: 4px; }
+    .stat-card .value { font-size: 1.4rem; font-weight: 700; color: #58a6ff; }
+    .stat-card .sub   { font-size: 0.72rem; color: #8b949e; margin-top: 2px; }
+
+
+
+    svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #8b949e; }
+
+
+    #tooltip {
+      position: absolute; background: #1c2128; border: 1px solid #388bfd;
+      border-radius: 6px; padding: 8px 12px; font-size: 12px;
+      color: #c9d1d9; pointer-events: none; opacity: 0; transition: opacity 0.1s;
+    }
+
+
+  </style>
+
 </head>
 
 
@@ -32,9 +76,20 @@
 
 
 
+<div class="stats">
+
+  <div class="stat-card"><div  class="label">Total Residents Affected</div><div class="value" id="s-total">—</div><div class="sub">All Years in Dataset</div></div>
+
+  <div class="stat-card"><div class="label">Breach Events</div><div class="value" id="s-events">—</div><div class="sub">Unique Events</div></div>
+
+  <div class="stat-card"><div class="label">Worst Single Month</div><div class="value" id="s-peak">—</div><div class="sub" id="s-peak-date">—</div></div>
+
+  <div class="stat-card"><div class="label">Selected Window</div><div class="value" id="s-window">—</div><div class="sub" id="s-window-date">Update Filter Below</div></div>
+</div>
+
 <svg id="main-svg"></svg>
 
-<div id="tooltip" style="position:absolute;background:#fff;border:1px solid #ccc;padding:6px;font-size:12px;pointer-events:none;opacity:0;"></div>
+<div id="tooltip"></div>
 
 
 
@@ -111,9 +166,9 @@ _mainG.append('text').attr('transform', 'rotate(-90)').attr('x', -_focusHeight /
 // path elements
 // add svg elements to path
 // use clip path to force filtering
-const areaPath = _mainG.append('path').attr('fill', 'steelblue').attr('opacity', 0.3).attr('clip-path', 'url(#clip)');
-const linePath = _mainG.append('path').attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 2).attr('clip-path', 'url(#clip)');
-const ctxPath  = _filterG.append('path').attr('fill', 'steelblue').attr('opacity', 0.2);
+const areaPath = _mainG.append('path').attr('fill', '#388bfd').attr('opacity', 0.25).attr('clip-path', 'url(#clip)');
+const linePath = _mainG.append('path').attr('fill', 'none').attr('stroke', '#388bfd').attr('stroke-width', 2).attr('clip-path', 'url(#clip)');
+const ctxPath  = _filterG.append('path').attr('fill', '#388bfd').attr('opacity', 0.2);
 
 // group for filtering
 const _filteringGroup = _filterG.append('g');
@@ -155,6 +210,18 @@ d3.csv(data_input_file).then(_inputData => {
   ).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date - b.date);
   // console.log(`Check Time: ${_byMonthRollup.length}`, _byMonthRollup.slice(0, 3));
 
+  // post release beta changes - populate summary stats
+  const _fmtN = n => d3.format(',')(n);
+
+  const _fmtD = d => d3.timeFormat('%b %Y')(d);
+
+  const _peakMonth = _byMonthRollup.reduce((a, b) => b.total > a.total ? b : a);
+
+  // set doc elements using ids
+  document.getElementById('s-total').textContent  =  _fmtN(d3.sum(rows, d => d.affected));
+  document.getElementById('s-events').textContent =    _fmtN(rows.length);
+  document.getElementById('s-peak').textContent   = _fmtN(_peakMonth.total);
+  document.getElementById('s-peak-date').textContent =    _fmtD(_peakMonth.date);
 
   // setting scalse
   const _dataDateExtents = d3.extent(_byMonthRollup, d => d.date); // earliest and latest
@@ -224,6 +291,13 @@ d3.csv(data_input_file).then(_inputData => {
     linePath.attr('d', _lineSetting);
     xAxisMain.call(d3.axisBottom(_x).ticks(6).tickFormat(d3.timeFormat('%b %y')));
     _yAxisAll.call(d3.axisLeft(_yMain).ticks(6).tickFormat(d3.format('.2s')));
+
+    // need to also update stats whindow on change
+    const _wTotal = d3.sum(_updatedVizData, d => d.total);
+
+    // set els
+    document.getElementById('s-window').textContent     = _fmtN(_wTotal);
+    document.getElementById('s-window-date').textContent = _fmtD(_convSelection[0]) + ' – ' + _fmtD(_convSelection[1]);
   }
 
 
