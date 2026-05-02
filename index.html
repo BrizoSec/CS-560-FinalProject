@@ -6,18 +6,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
   <title>WA Data Breach Analysis</title>
-</head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    body {
+      background: #0d1117; color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 48px 32px; max-width: 820px; margin: 0 auto;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 700; color: #e6edf3; margin-bottom: 6px; }
+
+    h2 { font-size: 1rem; font-weight: 600; color: #e6edf3; margin: 28px 0 10px; }
+
+    p  { font-size: 0.88rem; color: #8b949e; line-height: 1.7; margin-bottom: 10px; }
+
+    .meta { font-size: 0.8rem; color: #8b949e; margin-bottom: 4px; }
+
+    .meta strong { color: #c9d1d9; }
+
+    .divider { border: none; border-top: 1px solid #30363d; margin: 24px 0; }
+
+    .design-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+
+    .design-list li {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 8px; padding: 14px 18px;
+      transition: border-color 0.15s;
+    }
+
+    .design-list li:hover { border-color: #388bfd; }
+
+    .design-list a {
+      text-decoration: none; color: #58a6ff;
+      font-weight: 600; font-size: 0.9rem;
+    }
+
+    .design-list .desc { font-size: 0.8rem; color: #8b949e; margin-top: 3px; }
+  </style>
+
+
+
+
+
+
+</head>
 
 <body>
 
   <h1>Washington State Data Breach Analysis &amp; Visualization</h1>
 
-  <p><strong>Name:</strong> Chase Chemero   </p>
+  <p class="meta" style="margin-top:8px"><strong>Name:</strong> Chase Chemero</p>
 
-  <p><strong>Class:</strong> CS 560: Information Visualization: 2026</p>
+  <p class="meta"><strong>Class:</strong> CS 560: Information Visualization (Spring 2026)</p>
 
-  <h2>Project Description </h2>
+
+
+
+
+
+
+
+
+  <hr class="divider"/>
+
+  <h2>Project Description</h2>
+
+
+
 
 
 
@@ -31,14 +87,36 @@
   </p>
 
   <h2>Designs</h2>
-  <ul>
-    <li><a href="design1.html">Temporal Dashboard</a>: Area chart of residents affected per month over time  </li>
-    <li><a href="design2.html"> Categorical Network</a>: Bipartite diagram linking organization type to information type stolen   </li>
-    <li><a href="design3.html">Heatmap View</a>:    Calendar heatmap of breach counts by month and year  </li>
 
-    <li><a href="final.html">Cross Chart Filtering</a></li>
+  <ul class="design-list">
+    <li>
+      <a href="design1.html">Design 1: Temporal Dashboard</a>
+
+      <div class="desc">Area chart of residents affected per month over time, with brush-to-zoom and summary stats.</div>
+    </li>
+    <li>
+
+      <a href="design2.html">Design 2: Categorical Network</a>
+      <div class="desc">Bipartite diagram linking organization type to information type stolen.</div>
+    </li>
+    <li>
+      <a href="design3.html">Design 3: Heatmap View</a>
+      <div class="desc">Calendar heatmap of breach counts and notification lag by month and year.</div>
+    </li>
+    <li>
+      <a href="final.html">Final: Integrated Dashboard</a>
+      <div class="desc">Cross-chart filtering: Allows Users to Filter Multiple Charts.</div>
+
+    </li>
+
+
+
+
 
   </ul>
 
 </body>
+
+
+
 </html>
