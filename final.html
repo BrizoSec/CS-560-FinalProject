@@ -11,7 +11,81 @@
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
+  <style>
+    /*CITATION: Used a GPT to create CSS bootstrap*/
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
+
+    body {
+      background: #0d1117; color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 24px 32px;
+    }
+
+
+
+    h1 { font-size: 1.5rem; font-weight: 600; color: #e6edf3; margin-bottom: 6px; }
+
+    h3 { font-size: 0.95rem; font-weight: 600; color: #e6edf3; margin: 20px 0 6px; }
+
+    p  { font-size: 0.84rem; color: #8b949e; margin-bottom: 14px; }
+
+
+
+    .chart-box {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 10px; padding: 16px 20px; margin-bottom: 16px;
+    }
+
+
+    .chart-box h3 { margin-top: 0; }
+
+
+    svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #8b949e; }
+
+    .axis path, .axis line { stroke: #30363d; }
+    .axis text { fill: #8b949e; }
+
+
+    #donut-legend { font-size: 0.78rem; color: #8b949e; margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+    #donut-legend span { cursor: pointer; }
+
+    #donut-legend span:hover { color: #e6edf3; }
+
+    #filter-bar {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 28px; margin-bottom: 16px; font-size: 0.8rem;
+    }
+
+
+
+
+    #filter-bar .filter-tag {
+      display: flex; align-items: center; gap: 6px;
+      background: #388bfd22; border: 1px solid #388bfd55;
+      border-radius: 4px; padding: 3px 10px; color: #58a6ff;
+    }
+
+    #filter-bar .clear-btn {
+      background: none; border: none; color: #8b949e;
+      font-size: 0.9rem; cursor: pointer; line-height: 1; padding: 0 2px;
+    }
+
+
+    #filter-bar .clear-btn:hover { color: #f78166; }
+
+
+    #filter-bar .no-filter { color: #8b949e; }
+
+    #tip {
+      position: fixed; background: #1c2128; border: 1px solid #388bfd;
+      border-radius: 6px; padding: 8px 12px; font-size: 12px;
+      color: #c9d1d9; pointer-events: none; opacity: 0; transition: opacity 0.1s;
+    }
+
+
+  </style>
 
 </head>
 
@@ -20,36 +94,37 @@
 
 
 <h1>Integrated Dashboard</h1>
-<p>Click on the donut slices filter charts.</p>
-
-
-<!--&lt;!&ndash;lin svg -->
-<h3>Monthly Residents Affected </h3>
-
-
-<svg id="line-svg"></svg>
+<p>Click on Donut Slices to Filter Viz.</p>
 
 
 
-
-<!--bar plus cause legend-->
-<h3>Breach Events by Year</h3>
-
-<svg id="bar-svg"></svg>
+<div id="filter-bar"><span class="no-filter">No filter Currently</span></div>
 
 
 
-
-<!--donut legend -->
-<h3>Information Types Compromised</h3>
-<svg id="donut-svg"></svg>
-
-<div id="donut-legend" style="font-size:13px;margin-top:6px;"></div>
+<div class="chart-box">
+  <h3>Monthly Residents Affected</h3>
+  <svg id="line-svg"></svg>
+</div>
 
 
-<!-- tt -->
 
-<div id="tip" style="position:fixed;background:#fff;border:1px solid #555;padding:6px 10px;font-size:12px;pointer-events:none;opacity:0;"></div>
+<div class="chart-box">
+  <h3>Breach Events by Year</h3>
+  <svg id="bar-svg"></svg>
+</div>
+
+
+
+<div class="chart-box">
+  <h3>Information Types Compromised</h3>
+  <svg id="donut-svg"></svg>
+  <div id="donut-legend"></div>
+</div>
+
+
+
+<div id="tip"></div>
 
 
 
@@ -235,12 +310,39 @@ function manageState() {
 
   const _dataRowsActive = _applyFilters();
 
-  // console.log(`updateAll() calld`);
-
   updateLineChart(_dataRowsActive);
   updateBarChart(_dataRowsActive);
-
   updateDonutChart();    // no change here for obvious reasons
+
+  // change filter bar
+  const _bar = document.getElementById('filter-bar');
+
+
+  if (_filterInfoT) {
+
+    const _color = _infoColorMapping.get(_filterInfoT) || '#58a6ff';
+
+    // add a span
+    _bar.innerHTML =
+      `<span class="filter-tag">` +
+        `<svg width="10" height="10" style="vertical-align:middle;flex-shrink:0"><circle cx="5" cy="5" r="5" fill="${_color}"/></svg>` +
+        `Filtered by: <strong>${_filterInfoT}</strong>` +
+        `<button class="clear-btn" title="Clear filter">✕</button>` +
+      `</span>`;
+
+
+    _bar.querySelector('.clear-btn').addEventListener('click', () => {
+      // on click
+      _filterInfoT = null;
+
+      manageState();
+    });
+
+
+  } else {
+    _bar.innerHTML = `<span class="no-filter">No filter Applied</span>`;
+  }
+
 }
 
 
@@ -325,7 +427,7 @@ function updateLineChart(rows) {
 
 
   //  match the selected info type, otherwise use def
-  const color = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : 'gray';
+  const color = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : '#8b949e';
 
   // .datum binds a single value to the selection https://d3js.org/d3-selection/joining#selection_datum
   _lineG.select('.line-area').datum(_summed).attr('d', _lineAreaGenerator).attr('fill', color);
@@ -392,7 +494,7 @@ function updateBarChart(_rws) {
   _barY.domain([0, d3.max(_yrs, y => _cntByYear.get(y) || 0) * 1.12 || 1]).nice();
 
   // default to gray 
-  const _col = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : 'gray';
+  const _col = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : '#8b949e';
 
  //
   _barG.selectAll('.bar').data(_yrs, d => d)
@@ -494,7 +596,7 @@ function updateDonutChart() {
     .join(
       enter => enter.append('path')
         .attr('fill',   d => _infoColorMapping.get(d.data.info))
-        .attr('stroke', '#fff').attr('stroke-width', 1).attr('cursor', 'pointer')
+        .attr('stroke', '#0d1117').attr('stroke-width', 1).attr('cursor', 'pointer')
               // on click
         .on('click', (ev, d) => {
           // toggle
