@@ -10,6 +10,33 @@
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d1117; color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 24px 32px;
+    }
+    h2 { font-size: 1.3rem; font-weight: 600; color: #e6edf3; margin-bottom: 6px; }
+    p  { font-size: 0.84rem; color: #8b949e; margin-bottom: 14px; }
+
+    .toggle-group { display: flex; gap: 0; margin-bottom: 14px; border-radius: 6px; overflow: hidden; width: fit-content; border: 1px solid #30363d; }
+    .toggle-btn {
+      padding: 6px 18px; font-size: 0.78rem; cursor: pointer;
+      background: #21262d; color: #8b949e; border: none; outline: none;
+    }
+    .toggle-btn.active { background: #388bfd; color: #fff; font-weight: 600; }
+    .toggle-btn:hover:not(.active) { background: #30363d; color: #c9d1d9; }
+
+    svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #8b949e; }
+    #tip {
+      position: fixed; background: #1c2128; border: 1px solid #388bfd;
+      border-radius: 6px; padding: 8px 12px; font-size: 12px;
+      color: #c9d1d9; pointer-events: none; opacity: 0; transition: opacity 0.1s;
+    }
+    #legend-wrap { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.78rem; color: #8b949e; }
+  </style>
+
 </head>
 <body>
 
@@ -32,24 +59,28 @@
 
 
 
-<!--svg-->
-<svg id="chart"></svg>
+<!-- post beta change, adding togggle -->
+<div class="toggle-group">
 
+  <button class="toggle-btn active" data-mode="count">Breach Count</button>
 
+  <button class="toggle-btn"        data-mode="lag"  >Notification Lag (Days)</button>
 
-
-<!--legend-->
-<div>
-  <span id="leg-low"></span>
-
-  <canvas id="grad-canvas" width="200" height="10"></canvas>
-
-  <span id="leg-high"></span>
 
 </div>
 
-<!--tt-->
-<div id="tip" style="position:fixed;background:#fff;border:1px solid #555;padding:6px 10px;font-size:12px;pointer-events:none;opacity:0;"></div>
+<!--svg-->
+<svg id="chart"></svg>
+
+<!--legend-->
+<div id="legend-wrap">
+
+  <span id="leg-low"></span>
+  <canvas id="grad-canvas" width="200" height="10"></canvas>
+  <span id="leg-high"></span>
+</div>
+
+<div id="tip"></div>
 
 
 
@@ -64,18 +95,38 @@ const inputDataRaw = 'Data_Breach_Notifications_Affecting_Washington_Residents__
 // months
 const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// Date format
+// Date formats
 const _parseableDataFormat = d3.timeParse('%m/%d/%Y %I:%M:%S %p');
-
+const _parseStart = d3.timeParse('%Y-%m-%dT%H:%M:%S');
 
 // tt
 const _tt = d3.select('#tip');
 
-
 // state vars
 // Declared at module scope so buildGrid() and drawLegend() can share
 let _cellDataS = [];  // year + month
-let _colorScale;        //  sequential color scale
+let _colorScale;        //  sequential color scale (count)
+let _colorScaleLag;     //  sequential color scale (lag)
+
+let _mode = 'count';
+
+
+// toggle using event listener
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+
+  btn.addEventListener('click', () => {
+
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+
+    btn.classList.add('active');
+
+    _mode = btn.dataset.mode;
+
+    updateColors();
+
+    addLegend();
+  });
+});
 
 
 // load data now
@@ -100,14 +151,20 @@ d3.csv(inputDataRaw).then(inputRawData => {
 
 
 
+    const _start = r.DateStart ? _parseStart(r.DateStart) : null;
+    const _lag   = _start ? (_parseable - _start) / 86400000 : null; // divide by miliseconds
     _rws.push({
       year:  _parseable.getFullYear(),
       month: _parseable.getMonth(),
-      aff: +r.WashingtoniansAffected || 0,
-
+      aff:   +r.WashingtoniansAffected || 0,
+      // 5 year max for lag
+      lag:   (_lag !== null && _lag >= 0 && _lag < 1825) ? _lag : null,
     });
   });
   // console.log(`Unique breach records after de-duplication: ${_rws.length}`);
+
+
+  // always using 95th percentile to prevent outliers from messing up the graphs
 
 
 
@@ -118,8 +175,9 @@ d3.csv(inputDataRaw).then(inputRawData => {
   const _rollupMapping = d3.rollups(
     _rws,
     v => ({
-      count: v.length,
-      total: d3.sum(v, d => d.aff),
+      count:  v.length,
+      total:  d3.sum(v, d => d.aff),
+      medLag: d3.median(v.filter(d => d.lag !== null), d => d.lag),
     }),
     d => d.year,
     d => d.month
@@ -141,8 +199,11 @@ d3.csv(inputDataRaw).then(inputRawData => {
   // Blues sequential
   // CITATION d3.scaleSequential ::: https://d3js.org/d3-scale/sequential
   // CITATION - d3.interpolateBlues ::: https://d3js.org/d3-scale-chromatic/sequential#interpolateBlues
-  _colorScale = d3.scaleSequential(d3.interpolateBlues).domain([0, d3.max(_cellDataS, r => r.count)]);
-  // console.log(`Color scale domain: [0, ${_colorScale.domain()[1]}]`);
+  _colorScale = d3.scaleSequential(d3.interpolateBlues)
+    .domain([0, d3.quantile(_cellDataS.map(d => d.count).sort(d3.ascending), 0.95)]);
+  _colorScaleLag = d3.scaleSequential(d3.interpolateYlOrRd)
+          // safety at 95% of max to prevent mean impact from outlier
+    .domain([0, d3.quantile(_cellDataS.filter(d => d.medLag != null).map(d => d.medLag).sort(d3.ascending), 0.95)]);
 
 
   // TODO: add a toggle to switch the viz  between breach count and residents affected
@@ -204,31 +265,47 @@ function constructTable(yearIpts) {
 
 
   // draw one colored rect per with actual breach records
-  _svg.selectAll('.cell').data(_cellDataS, d => `${d.year}-${d.month}`).join('rect')
+  const _cells = _svg.selectAll('.cell').data(_cellDataS, d => `${d.year}-${d.month}`).join('rect')
     .attr('x',      d => _leftPadding + d.month * _cw + 2)
     .attr('y',      d => _topPadding + yearIpts.indexOf(d.year) * _ch + 2)
     .attr('width',  _cw - 4)
-    .attr('height',   _ch - 4).attr('rx', 3).attr('cursor', 'pointer')
-    .attr('fill',   d => _colorScale(d.count))
+    .attr('height', _ch - 4).attr('rx', 3).attr('cursor', 'pointer')
 
-          // tooltip action
     .on('mousemove', (ev, d) => {
-      console.log(`Tooltip: ${_MONTHS[d.month]} ${d.year} :: count: ${d.count}`);
-
+      //////////////
+      const lagStr = d.medLag != null ? Math.round(d.medLag) + ' days' : 'N/A';
       _tt.html(
         `<b>${_MONTHS[d.month]} ${d.year}</b><br>` +
-        `Breach events: ${d.count}<br>` +
-        `Residents affected: ${d3.format(',')(d.total)}`
+        `Breach Events: ${d.count}<br>` +
+        `Median Lag: ${lagStr}<br>` +
+        `Residents Affected: ${d3.format(',')(d.total)}`
       )
-
       .style('left',    (ev.clientX + 14) + 'px')
       .style('top',     (ev.clientY - 14) + 'px')
       .style('opacity', 1);
     })
-          // tt off
     .on('mouseleave', () => _tt.style('opacity', 0));
 
+  // store for color updates
+  d3.select('#chart').property('_cells', _cells);
+
+  updateColors();
   // console.log('Grid ');
+}
+
+function updateColors() {
+
+
+  const _cells = d3.select('#chart').property('_cells');
+
+  // safety
+  if (!_cells) return;
+
+  // change using mode
+  _cells.attr('fill', d => {
+    if (_mode === 'count') return _colorScale(d.count);
+    return d.medLag != null ? _colorScaleLag(d.medLag) : '#21262d';
+  });
 }
 
 
@@ -242,19 +319,19 @@ function constructTable(yearIpts) {
 // CITATION :: HTMLCanvasElement.getContext https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
 function addLegend() {
   const _fullCanv = document.getElementById('grad-canvas');
-  const _context    = _fullCanv.getContext('2d');
+  const _context  = _fullCanv.getContext('2d');
   const W = _fullCanv.width, H = _fullCanv.height;
-  const [_low, _high] = _colorScale.domain();
+  const scale = _mode === 'count' ? _colorScale : _colorScaleLag;
+  const [_low, _high] = scale.domain();
 
-  // fill canvas with gradient
   for (let i = 0; i < W; i++) {
-    _context.fillStyle = _colorScale(_low + (_high - _low) * i / W); //  across domain
+    _context.fillStyle = scale(_low + (_high - _low) * i / W);
     _context.fillRect(i, 0, 1, H);
   }
 
-  document.getElementById('leg-low').textContent  = '0 breaches';
-  document.getElementById('leg-high').textContent = Math.round(_high) + ' breaches';
-
+  document.getElementById('leg-low').textContent  = _mode === 'count' ? '0 breaches' : '0 days';
+  document.getElementById('leg-high').textContent = _mode === 'count'
+    ? Math.round(_high) + ' breaches' : Math.round(_high) + ' days';
 }
 
 
