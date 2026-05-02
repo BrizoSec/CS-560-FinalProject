@@ -401,6 +401,10 @@ function createLine() {
   _lineGrp.append('text').attr('x', _finalWidth / 2).attr('y', _h + 35).attr('text-anchor', 'middle').text('Year');
   _lineGrp.append('text').attr('transform', 'rotate(-90)').attr('x', -_h / 2).attr('y', -68).attr('text-anchor', 'middle').text('Residents Affected');
 
+  // overlay for tooltip
+  _lineGrp.append('rect').attr('class', 'line-overlay')
+    .attr('fill', 'none').attr('pointer-events', 'all')
+    .attr('width', _finalWidth).attr('height', _h);
 
   // console.log('Line chart done.');
 }
@@ -434,6 +438,18 @@ function updateLineChart(rows) {
   _lineG.select('.line-stroke').datum(_summed).attr('d', _lineLineGenerator).attr('stroke', color);
 
 
+  // tooltip handlers
+  _lineG.select('.line-overlay')
+          // mouse over
+    .on('mousemove', function(ev) {
+      const [mx, my] = d3.pointer(ev); // location
+      // add tooltip
+      _tt.html(`<b>${d3.timeFormat('%b %Y')(_lnX.invert(mx))}</b><br>Residents: ${d3.format(',.0f')(_lnY.invert(my))}`)
+        .style('left', (ev.clientX + 14) + 'px').style('top',  (ev.clientY - 12) + 'px').style('opacity', 1);
+    })
+          // mouse off
+    .on('mouseleave', () => _tt.style('opacity', 0));
+
   // axes
 
   _lineG.select('.x-axis').call(d3.axisBottom(_lnX).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat('%Y')));
@@ -449,7 +465,7 @@ function updateLineChart(rows) {
 function createBar() {
   
   
-  const _marg = { top: 10, right: 20, bottom: 42, left: 52 };
+  const _marg = { top: 10, right: 20, bottom: 42, left: 65 };
   const W0 = 900, H = 200;
   const _fullWidth  = W0 - _marg.left - _marg.right;
 
