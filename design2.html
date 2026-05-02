@@ -25,6 +25,12 @@
 <p>Bipartite node-link diagram. Hover nodes or links for more info.</p>
 
 
+<!-- adding a slider to filter on minimum incidents by count -->
+<div style="margin-bottom:8px;font-size:13px;">Minimum Incident Filter
+  <input type="range" id="min-node-count" min="1" max="30" value="1" style="width:100px;vertical-align:middle"/>
+  <span id="min-node-label">1</span>
+</div>
+
 <!--main svg-->
 <svg id="cht"></svg>
 
@@ -63,6 +69,11 @@ const _indColorMap = k => IND_COL_MAP[k] || '#888888'; // have a fallback
 
 // tooltip
 const tip = d3.select('#tip');
+
+// add a slider by two elements (count and label, basically redraw nodes on any update)
+const _slider =  document.getElementById('min-node-count');
+const _minLabel =       document.getElementById('min-node-label');
+_slider.addEventListener('input', () => {  _minLabel.textContent = _slider.value; drawNodes(); });
 
 
 // module level state mgr
@@ -121,6 +132,7 @@ d3.csv(_dataInputFileSource).then(inputRaw => {
   // console.log(`Nodes; : ${_indNodes.length}`);
 
   //
+  _slider.max = Math.max(5, Math.floor(d3.max(_allLinks, d => d.count) / 3));
   _generateSvg();
   _generateLegend();
 });
@@ -207,8 +219,11 @@ function drawNodes() {
   console.log(`render; links`);
 
 
+  // basically, just filter all links for the count value (on slider)
+  const _adjLinks = _allLinks.filter(l => l.count >= +_slider.value);
+
   _linkGroup.selectAll('path')
-    .data(_allLinks, _nodeData => _nodeData.source + '|||' + _nodeData.target) // key
+    .data(_adjLinks, _nodeData => _nodeData.source + '|||' + _nodeData.target) // key
     .join('path').attr('fill', 'none').attr('d', buildBezierLine)
       .attr('stroke',       d => _indColorMap(d.source))
       .attr('stroke-width', d => _linkWeightSc(d.count))
