@@ -225,7 +225,7 @@ d3.csv(data_input_file).then(_inputData => {
 
   // setting scalse
   const _dataDateExtents = d3.extent(_byMonthRollup, d => d.date); // earliest and latest
-  // console.log(`Date extent: ${_dataDateExtents[0].toDateString()} → ${_dataDateExtents[1].toDateString()}`);
+  // console.log(`Date extent: ${_dataDateExtents[0].toDateString()} to ${_dataDateExtents[1].toDateString()}`);
 
   _x.domain(_dataDateExtents);      // main chart x starts at full range
   _xFiltering.domain(_dataDateExtents);   // filtering x  shows full range

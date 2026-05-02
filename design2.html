@@ -269,7 +269,7 @@ function drawNodes() {
       .attr('opacity', 0.3)
           // tooltip action
       .on('mousemove',  (ev, d) => addTt(ev,
-        `<b>${d.source} → ${d.target}</b><br>Incidents: ${applyCommaDelim(d.count)}<br>Residents: ${applyCommaDelim(d.aff)}`))
+        `<b>${d.source} & ${d.target}</b><br>Incidents: ${applyCommaDelim(d.count)}<br>Residents: ${applyCommaDelim(d.aff)}`))
       .on('mouseleave', () => tip.style('opacity', 0));
 }
 
