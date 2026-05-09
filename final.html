@@ -7,7 +7,7 @@
 <head>
 
   <meta charset="UTF-8"/>
-  <title>Integrated Dashboard :: WA Data Breaches</title>
+  <title>Washington Data Breach Explorer</title>
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
@@ -47,7 +47,7 @@
     .axis text { fill: #8b949e; }
 
 
-    #donut-legend { font-size: 0.78rem; color: #8b949e; margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    #donut-legend { font-size: 0.78rem; color: #8b949e; display: flex; flex-direction: column; gap: 5px; }
 
     #donut-legend span { cursor: pointer; }
 
@@ -84,6 +84,30 @@
       color: #c9d1d9; pointer-events: none; opacity: 0; transition: opacity 0.1s;
     }
 
+    .donut-wrap {
+      display: flex; justify-content: center; margin-bottom: 16px;
+    }
+
+    .donut-wrap .chart-box {
+      display: inline-block;
+    }
+
+    .donut-inner {
+      display: flex; align-items: center; gap: 14px;
+    }
+
+    .charts-row {
+      display: flex; gap: 16px;
+    }
+
+    .charts-row .chart-box {
+      flex: 1; min-width: 0;
+    }
+
+    .charts-row svg {
+      width: 100%; height: auto; display: block;
+    }
+
 
   </style>
 
@@ -93,7 +117,7 @@
 
 
 
-<h1>Integrated Dashboard</h1>
+<h1>Washington Data Breach Explorer</h1>
 <p>Click on Donut Slices to Filter Viz.</p>
 
 
@@ -102,24 +126,26 @@
 
 
 
-<div class="chart-box">
-  <h3>Monthly Residents Affected</h3>
-  <svg id="line-svg"></svg>
+<div class="donut-wrap">
+  <div class="chart-box">
+    <h3>Information Types Compromised</h3>
+    <div class="donut-inner">
+      <svg id="donut-svg"></svg>
+      <div id="donut-legend"></div>
+    </div>
+  </div>
 </div>
 
+<div class="charts-row">
+  <div class="chart-box">
+    <h3>Monthly Residents Affected</h3>
+    <svg id="line-svg"></svg>
+  </div>
 
-
-<div class="chart-box">
-  <h3>Breach Events by Year</h3>
-  <svg id="bar-svg"></svg>
-</div>
-
-
-
-<div class="chart-box">
-  <h3>Information Types Compromised</h3>
-  <svg id="donut-svg"></svg>
-  <div id="donut-legend"></div>
+  <div class="chart-box">
+    <h3>Breach Events by Year</h3>
+    <svg id="bar-svg"></svg>
+  </div>
 </div>
 
 
@@ -254,6 +280,8 @@ d3.csv(_dataIn).then(
   createBar();
   createDonut();
 
+  // default to the first info type selected
+  _filterInfoT = _infoTypeAll[0].info;
 
   manageState();
 
@@ -354,13 +382,16 @@ function createLine() {
 
   const _sizeSettings = { top: 20, right: 20, bottom: 42, left: 82 };
 
-  const W0 = 900, _h = 200;
+  const W0 = 430, _h = 150;
 
   const _finalWidth  = W0 - _sizeSettings.left - _sizeSettings.right;
 
 
+  const _totalH = _h + _sizeSettings.top + _sizeSettings.bottom;
   const _lineSvg = d3.select('#line-svg')
-    .attr('width', W0).attr('height', _h + _sizeSettings.top + _sizeSettings.bottom);
+    .attr('width', W0).attr('height', _totalH)
+    .attr('viewBox', `0 0 ${W0} ${_totalH}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
 
 
 
@@ -431,7 +462,7 @@ function updateLineChart(rows) {
 
 
   //  match the selected info type, otherwise use def
-  const color = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : '#8b949e';
+  const color = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : _INFO_COLOR_PAL[9];
 
   // .datum binds a single value to the selection https://d3js.org/d3-selection/joining#selection_datum
   _lineG.select('.line-area').datum(_summed).attr('d', _lineAreaGenerator).attr('fill', color);
@@ -466,13 +497,16 @@ function createBar() {
   
   
   const _marg = { top: 10, right: 20, bottom: 42, left: 65 };
-  const W0 = 900, H = 200;
+  const W0 = 430, H = 150;
   const _fullWidth  = W0 - _marg.left - _marg.right;
 
   
+  const _barTotalH = H + _marg.top + _marg.bottom;
   const _barSvg = d3.select('#bar-svg')
     .attr('width', W0)
-    .attr('height', H + _marg.top + _marg.bottom);
+    .attr('height', _barTotalH)
+    .attr('viewBox', `0 0 ${W0} ${_barTotalH}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
 
   
   
@@ -510,7 +544,7 @@ function updateBarChart(_rws) {
   _barY.domain([0, d3.max(_yrs, y => _cntByYear.get(y) || 0) * 1.12 || 1]).nice();
 
   // default to gray 
-  const _col = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : '#8b949e';
+  const _col = _filterInfoT ? _infoColorMapping.get(_filterInfoT) : _INFO_COLOR_PAL[9];
 
  //
   _barG.selectAll('.bar').data(_yrs, d => d)
@@ -554,7 +588,7 @@ function updateBarChart(_rws) {
 
 function createDonut() {
 
-  const _r = 120;
+  const _r = 137;
   const _width = _r * 2 + 20, _Height = _r * 2 + 20;
 
   const _donutSvg = d3.select('#donut-svg').attr('width', _width).attr('height', _Height);
@@ -584,9 +618,10 @@ function createDonut() {
 
     _addedSpan.style.cursor = 'pointer';
     //
+    const _shortLabel = d.info.length > 20 ? d.info.slice(0, 18).trimEnd() + '…' : d.info;
     _addedSpan.innerHTML =
       `<svg width="12" height="12" style="vertical-align:middle">` +
-      `<rect width="11" height="11" rx="2" fill="${_INFO_COLOR_PAL[i]}"/></svg> ${d.info} &nbsp;&nbsp;`;
+      `<rect width="11" height="11" rx="2" fill="${_INFO_COLOR_PAL[i]}"/></svg> ${_shortLabel}`;
 
 
     _addedSpan.addEventListener('click', () => {

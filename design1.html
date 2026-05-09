@@ -52,6 +52,8 @@
     svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #8b949e; }
 
 
+    #main-svg { width: 70%; height: auto; display: block; margin: 0 auto; }
+
     #tooltip {
       position: absolute; background: #1c2128; border: 1px solid #388bfd;
       border-radius: 6px; padding: 8px 12px; font-size: 12px;
@@ -108,7 +110,7 @@ const _marg    = { top: 20, right: 30, bottom: 30, left: 80 }; // main chart mar
 const _margFiltering = { top: 10, right: 30, bottom: 30, left: 80 }; // filtering section margin
 const _totalWidth = 960;
 
-const _mainHeight = 300, _filteringHeight = 60, gap = 20; // heights of charts and gap between which
+const _mainHeight = 320, _filteringHeight = 60, gap = 20; // heights of charts and gap between which
 const fullWidth  = _totalWidth - _marg.left - _marg.right;
 const _focusHeight = _mainHeight;
 const cH = _filteringHeight;
@@ -116,7 +118,9 @@ const _totalHeight = _marg.top + _focusHeight + gap + _margFiltering.top + cH + 
 
 
 // svg
-const _svg = d3.select('#main-svg').attr('width', _totalWidth).attr('height', _totalHeight);
+const _svg = d3.select('#main-svg').attr('width', _totalWidth).attr('height', _totalHeight)
+  .attr('viewBox', `0 0 ${_totalWidth} ${_totalHeight}`)
+  .attr('preserveAspectRatio', 'xMidYMid meet');
 
 // clip enforces filtering selection
 _svg.append('defs').append('clipPath').attr('id', 'clip').append('rect').attr('width', fullWidth).attr('height', _focusHeight);

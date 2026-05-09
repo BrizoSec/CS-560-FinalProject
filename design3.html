@@ -29,6 +29,7 @@
     .toggle-btn:hover:not(.active) { background: #30363d; color: #c9d1d9; }
 
     svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #8b949e; }
+    #chart { display: block; width: 70%; height: auto; margin: 0 auto; }
     #tip {
       position: fixed; background: #1c2128; border: 1px solid #388bfd;
       border-radius: 6px; padding: 8px 12px; font-size: 12px;
@@ -233,7 +234,8 @@ function constructTable(yearIpts) {
   // console.log(`Test`);
 
 
-  const _svg = d3.select('#chart').attr('width', _wid).attr('height', _hei);
+  const _svg = d3.select('#chart').attr('width', _wid).attr('height', _hei)
+    .attr('viewBox', `0 0 ${_wid} ${_hei}`).attr('preserveAspectRatio', 'xMidYMid meet');
 
   // column headers (top row)
   _svg.selectAll('.mlbl').data(_MONTHS).join('text')

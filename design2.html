@@ -32,7 +32,7 @@
     }
     #min-node-label { color: #e6edf3; font-weight: 600; min-width: 20px; }
 
-    #cht { display: block; overflow: visible; }
+    #cht { display: block; overflow: visible; width: 90%; height: auto; margin: 0 auto; }
     svg text { font-family: 'Segoe UI', system-ui, sans-serif; fill: #c9d1d9; }
 
     #legend { margin-top: 10px; font-size: 0.78rem; color: #8b949e; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -65,7 +65,7 @@
 
 <!-- adding a slider to filter on minimum incidents by count -->
 <div class="slideLinkCntrl">
-  <span>Min incidents per link:</span>
+  <span>Incidents Per Link:</span>
   <input type="range" id="min-node-count" min="1" max="30" value="1" style="width:100px"/>
   <span id="min-node-label">1</span>
 </div>
@@ -73,8 +73,6 @@
 <!--main svg-->
 <svg id="cht"></svg>
 
-<!--legend-->
-<div id="legend"></div>
 
 
 
@@ -167,13 +165,12 @@ d3.csv(_dataInputFileSource).then(inputRaw => {
   // flat maps into plain arrays and sort descending
   _allLinks  =  Array.from(_pairMap.values()).map(d => ({ source: d.ind, target: d.info, count: d.ids.size, aff: d.aff }));
   _indNodes  = Array.from(_industryMap.entries()).map(([n, s]) => ({ name: n, count: s.size })).sort((a, b) => b.count - a.count);
-  _infoNodes = Array.from(_infoMap.entries()).map(([n, s]) => ({ name: n, count: s.size })).sort((a, b) => b.count - a.count);
+  _infoNodes = Array.from(_infoMap.entries()).map(([n, s]) => ({ name: n, count: s.size })).sort((a, b) => b.count - a.count).filter(d => d.name !== 'Other');
   // console.log(`Nodes; : ${_indNodes.length}`);
 
   //
-  _slider.max = Math.max(5, Math.floor(d3.max(_allLinks, d => d.count) / 3));
+  _slider.max = Math.max(5, Math.floor(d3.max(_allLinks, d => d.count)));
   _generateSvg();
-  _generateLegend();
 });
 
 
@@ -181,15 +178,16 @@ d3.csv(_dataInputFileSource).then(inputRaw => {
 // draw all nodes and the initial set of links....
 function _generateSvg() {
 
-  const _rowHeight = 44;   // vertical space between adjacent nodes
+  const _rowHeight = 46;   // vertical space between adjacent nodes
   const _rowCount  = Math.max(_indNodes.length, _infoNodes.length);
-  const _w = 960, H = _rowCount * _rowHeight + 60;
+  const _w = 1300, H = _rowCount * _rowHeight + 60;
 
   // left column x,   right column x, (midpoint)
   _lx = 200; _rx = _w - 200; MX = (_lx + _rx) / 2;
   // console.log(`SVG: ${_w}. chck`);
 
-  const _svg = d3.select('#cht').attr('width', _w).attr('height', H);
+  const _svg = d3.select('#cht').attr('width', _w).attr('height', H)
+    .attr('viewBox', `0 0 ${_w} ${H}`).attr('preserveAspectRatio', 'xMidYMid meet');
 
   // sqrt scale for node radius to keep nodes acceptable size
   // scaleSqrt (power scale) API reference:
@@ -208,8 +206,8 @@ function _generateSvg() {
   _rightYScale = d3.scalePoint().domain(_infoNodes.map(d => d.name)).range([30, H - 20]).padding(0.4);
 
   // headers
-  _svg.append('text').attr('x', _lx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#8b949e').text('Organization Type');
-  _svg.append('text').attr('x', _rx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#8b949e').text('Information Type Stolen');
+  _svg.append('text').attr('x', _lx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#e6edf3').attr('font-weight', 'bold').text('Organization Type');
+  _svg.append('text').attr('x', _rx).attr('y', 14).attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#e6edf3').attr('font-weight', 'bold').text('Information Type Stolen');
 
   // TODO: add a slider or input to filter down to top industries
   // TODO: add a highlighting on the edges when you hover over a node (would be cool)
@@ -237,8 +235,9 @@ function _generateSvg() {
     const _yAxisInfoTypeNodes = _rightYScale(d.name), r = _rightNodeScale(d.count);
 
     const _groupInfoTypeNodes = _svg.append('g').attr('transform', `translate(${_rx},${_yAxisInfoTypeNodes})`).style('cursor', 'pointer');
-    _groupInfoTypeNodes.append('circle').attr('r', r).attr('fill', 'gray').attr('opacity', 0.85);
-    _groupInfoTypeNodes.append('text').attr('x', r + 6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(d.name);
+    _groupInfoTypeNodes.append('circle').attr('r', r).attr('fill', '#556677').attr('opacity', 0.85);
+    const _shortName = d.name.length > 30 ? d.name.slice(0, 28).trimEnd() + '…' : d.name;
+    _groupInfoTypeNodes.append('text').attr('x', r + 6).attr('dy', '0.35em').attr('text-anchor', 'start').attr('font-size', 12).text(_shortName);
 
     // . tooltip
     _groupInfoTypeNodes
