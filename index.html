@@ -86,6 +86,20 @@
     breach occurs.
   </p>
 
+  <h2>Methodology</h2>
+
+  <p>
+    The dataset used is Washington State's public data breach notification records, sourced from the
+    Attorney General's office. Each record includes the reporting organization, breach date, notification
+    date, number of residents affected, type of information compromised, and industry sector.
+  </p>
+  <p>
+    Data was cleaned and parsed using Python (pandas), with dates normalized and missing values handled
+    through imputation or exclusion depending on the field. Notification lag was computed as the
+    difference between the breach date and the date residents were notified. Visualizations were built
+    with D3.js and are fully client-side, requiring no backend.
+  </p>
+
   <h2>Designs</h2>
 
   <ul class="design-list">
